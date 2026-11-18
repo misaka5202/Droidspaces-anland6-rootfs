@@ -251,6 +251,12 @@ GPU context —— `dmesg` 报 `Failed to get pid pointer`，用户态是 `eglIn
 不需要 `vkms`：anland 6.x 的 `waylandbridge` 直接使用 `/dev/mali0`，实测卸掉
 `vkms` 后渲染与上屏都正常。
 
+**如果你装的是 Anland 5.x 那一套**（`com.anland.consumer` + `anland-daemon` +
+`/run/display.sock`，容器内跑的是自带合成器的 KDE/GNOME/Hyprland/Niri/Mango/
+Denial），那条路线走 `ANLAND_DRM_DEVICE=/dev/dri/renderD128`；Mali 没有 DRM
+render node，**必须开 `vkms`**，`mali_nsfix` 对它是无效的。5.x 与 6.x 两套
+路由不要同时安装。
+
 ### 启动应用
 
 经 `anland-shell` 启动，不在容器内手动拉起进程。daemon 要求客户端携带完整会话

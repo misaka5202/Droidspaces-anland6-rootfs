@@ -126,14 +126,14 @@ while IFS= read -r file; do
   # 名称里带上 GPU 厂商，两个版本在同一 Release 里能区分
   case "$gpu" in
     qualcomm) gpu_label_zh='（高通 Adreno）'; gpu_label_en=' (Qualcomm Adreno)' ;;
-    mediatek) gpu_label_zh='（MTK vkms）';   gpu_label_en=' (MediaTek vkms)' ;;
+    mediatek) gpu_label_zh='（MTK Mali）';   gpu_label_en=' (MediaTek Mali)' ;;
     *)        gpu_label_zh='';               gpu_label_en='' ;;
   esac
   case "$gpu" in
     qualcomm) gpu_note_zh='启用高通 Adreno 硬件加速（Mesa Turnip/Freedreno + kgsl）。'
               gpu_note_en='Qualcomm Adreno hardware acceleration is enabled (Mesa Turnip/Freedreno over kgsl).' ;;
-    mediatek) gpu_note_zh='使用 vkms 虚拟 DRM 节点 + llvmpipe 软件渲染，宿主机需先加载 droidspaces-lkm 的 vkms 模块。'
-              gpu_note_en='Renders through the vkms virtual DRM node and llvmpipe; the host needs the vkms module from droidspaces-lkm loaded first.' ;;
+    mediatek) gpu_note_zh='Anland 6.x 会话经 libhybris 直驱厂商 Mali（/dev/mali0），宿主机需先安装 droidspaces-lkm 并加载 mali_nsfix；不需要 vkms。'
+              gpu_note_en='The Anland 6.x session drives the vendor Mali driver through libhybris on /dev/mali0; the host needs droidspaces-lkm with mali_nsfix loaded. No vkms.' ;;
     *)        gpu_note_zh='启用高通 Adreno/Mesa 支持。'
               gpu_note_en='Qualcomm Adreno/Mesa support is enabled.' ;;
   esac

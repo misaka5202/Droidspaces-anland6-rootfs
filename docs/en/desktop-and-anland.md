@@ -238,6 +238,13 @@ is enough; it loads automatically on Mali platforms. See the
 `vkms` is not needed: anland 6.x's `waylandbridge` drives `/dev/mali0` directly,
 and rendering and presentation still work with `vkms` removed.
 
+**If you installed the Anland 5.x set instead** (`com.anland.consumer` +
+`anland-daemon` + `/run/display.sock`, with a self-composited KDE/GNOME/
+Hyprland/Niri/Mango/Denial inside the container), that route renders via
+`ANLAND_DRM_DEVICE=/dev/dri/renderD128`. Mali has no DRM render node, so it
+**must enable `vkms`**; `mali_nsfix` does nothing for it. Do not run the 5.x and
+6.x routes at the same time.
+
 ### Starting apps
 
 **Use `anland-shell`; do not start applications by hand inside the container.**

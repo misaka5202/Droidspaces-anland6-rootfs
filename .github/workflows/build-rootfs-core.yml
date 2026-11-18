@@ -82,7 +82,7 @@ on:
         type: string
         default: '6.2'
       gpu_vendor:
-        description: 'GPU 厂商：qualcomm（Adreno 硬件加速）或 mediatek（vkms 软件渲染）'
+        description: 'GPU 厂商：qualcomm（Adreno 硬件加速）或 mediatek（libhybris + /dev/mali0，需 mali_nsfix）'
         required: false
         type: string
         default: qualcomm
