@@ -22,6 +22,11 @@ on:
           - both
           - qualcomm
           - mediatek
+      publish_release:
+        description: 是否更新 GitHub Release（小测设 false，只产 artifact）
+        required: false
+        type: boolean
+        default: true
       desktop:
         description: 构建哪个桌面环境（all-wayland 为全量，或指定单个如 kde-mobile）
         required: true
@@ -210,7 +215,7 @@ jobs:
   release:
     name: 更新 GitHub 滚动 Release
     needs: [prepare, build-zh-qualcomm, build-zh-mediatek, build-en-qualcomm, build-en-mediatek]
-    if: ${{ !cancelled() && inputs.sync_cnb_only != true }}
+    if: ${{ !cancelled() && inputs.sync_cnb_only != true && inputs.publish_release != true }}
     runs-on: ubuntu-latest
     env:
       # 单桌面测试用独立 tag，避免污染全量滚动 Release
@@ -364,7 +369,7 @@ jobs:
 
   sync-cnb:
     name: 同步中文资产到 CNB
-    if: ${{ !cancelled() && inputs.sync_cnb == true && inputs.sync_cnb_only != true }}
+    if: ${{ !cancelled() && inputs.sync_cnb == true && inputs.sync_cnb_only != true && inputs.publish_release != true }}
     needs: [prepare, build-zh-qualcomm, build-zh-mediatek, build-en-qualcomm, build-en-mediatek]
     runs-on: ubuntu-latest
     steps:
