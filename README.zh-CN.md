@@ -40,10 +40,30 @@ adb shell su -c 'sh /data/local/tmp/verify-anland6-host.sh'
 
 | 文件 | 来源 | 说明 |
 | --- | --- | --- |
-| `module/anland-awl.zip` | [anland 6.2](https://github.com/SuperTurtleDev/anland/releases/tag/6.2)，解压 `anland-build.2.zip` | `waylandbridge` 守护进程 |
-| `anland-wayland.apk` | 同上 | `com.anlandnext`，窗口消费者 |
+| `module/anland-awl.zip` | **[misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2)** | `waylandbridge` 守护进程（含输入修复） |
+| `anland-wayland.apk` | 同上 | `com.anlandnext`，窗口消费者（含额外按键栏） |
 | `anland-shell.apk` | **[misaka5202/anland-shell v1.1-ds72](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)** | 补丁版，见下 |
-| `anlandx.tar.gz` | 本仓库镜像已内置 | 容器内 `anlandx` 会话 |
+| `anlandx.tar.gz` | **[misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2)**（本仓库镜像也已内置） | 容器内 `anlandx` 会话 |
+
+### 为什么必须用改版（misaka5202/anland）
+
+不是可选，是必须。上游 6.2 有三个让桌面输入不可用的缺陷：
+
+1. **软键盘文本到不了应用。** 不实现 `zwp_text_input_v3` 的应用（Konsole/XTerm
+   这类终端）什么都收不到：`awl_ime_text()` 在「没有可用的 text_input」时直接
+   丢弃 commit。改版把 ASCII 文本降级成 `wl_keyboard` 按键 —— 这条路已被实测
+   可用（回车键就是走它）。
+2. **中文输入不可能。** daemon 没有实现 `zwp_input_method_v2`，容器内的
+   fcitx5 拿着字无处可送。改版实现了它。
+3. **额外按键栏有一部分是死的。** 最左一列（ESC/TAB）落在系统返回手势区里，
+   touch 被手势吃掉。改版用 `WindowInsets.Type.systemGestures()` 给底栏让边。
+
+此外还包含：5.x UI 移植（额外按键栏、可调透明度的沉浸式底栏）、新增文案的
+i18n、以及 IME 合成按键的 evdev 码完整映射（它们恒为 `scanCode == 0`）。
+
+全部由 `main` 构建，当前发布为 `6.2-ds2`。如果你只需要原生 6.2 的行为，请用
+[SuperTurtleDev/anland 6.2](https://github.com/SuperTurtleDev/anland/releases/tag/6.2)
+—— 但上面三个输入问题会复现。
 
 ### anland-shell 需用补丁版
 

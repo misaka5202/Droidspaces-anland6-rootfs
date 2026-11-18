@@ -27,7 +27,7 @@
 #
 # 环境变量
 #   ANLAND_VERSION        anland release tag，默认 6.2
-#   ANLAND_RELEASE_REPO   发布仓库，默认 SuperTurtleDev/anland
+#   ANLAND_RELEASE_REPO   发布仓库，默认 misaka5202/anland（改版）
 #   ANLAND_XWAYLAND       1=编译 patched Xwayland，默认 0（见下）
 #
 # 关于 ANLAND_XWAYLAND=0
@@ -40,8 +40,9 @@
 set -euo pipefail
 
 USERNAME_IN="${1:-}"
-RELEASE_REPO="${ANLAND_RELEASE_REPO:-SuperTurtleDev/anland}"
-BUILD_ZIP_NAME="${ANLAND_BUILD_ZIP:-anland-build.2.zip}"
+RELEASE_REPO="${ANLAND_RELEASE_REPO:-misaka5202/anland}"
+# 改版从 6.2-ds2 起发独立文件（不再是 anland-build.2.zip 整包）
+BUILD_ZIP_NAME="${ANLAND_BUILD_ZIP:-anlandx.tar.gz}"
 WANT_XWAYLAND="${ANLAND_XWAYLAND:-0}"
 MARKER=/etc/droidspaces-anland-major
 
@@ -105,7 +106,7 @@ if [ -f /etc/os-release ]; then
     # shellcheck disable=SC1091
     . /etc/os-release
 fi
-ANLAND_TAG="${ANLAND_VERSION:-6.2}"
+ANLAND_TAG="${ANLAND_VERSION:-6.2-ds2}"
 case "${ID:-}" in
     debian|ubuntu) install_deps_apt ;;
     fedora|rhel|centos) install_deps_dnf ;;
@@ -116,9 +117,9 @@ esac
 # ---------------------------------------------------------------------------
 # 2) 取 anlandx
 #
-# 发布包是 anland-build.2.zip，里面三件套：
+# 改版的发布包是三个独立文件（上游 6.2 才是 anland-build.2.zip 整包）：
 #   anland-wayland.apk        宿主 APK
-#   module/anland-awl.zip     KernelSU 模块（waylandbridge 守护进程）
+#   anland-awl.zip            KernelSU 模块（waylandbridge 守护进程）
 #   anlandx.tar.gz            容器内会话 ← 只要这个
 # ---------------------------------------------------------------------------
 TMP=/opt/anland6-src
@@ -129,12 +130,8 @@ trap cleanup EXIT
 
 URL="https://github.com/${RELEASE_REPO}/releases/download/${ANLAND_TAG}/${BUILD_ZIP_NAME}"
 log "下载 $URL"
-if ! curl -fsSL --retry 3 --max-time 300 -o "$TMP/anland.zip" "$URL"; then
+if ! curl -fsSL --retry 3 --max-time 300 -o "$TMP/anlandx.tar.gz" "$URL"; then
     echo "下载失败：$URL" >&2
-    exit 1
-fi
-if ! unzip -o -q "$TMP/anland.zip" anlandx.tar.gz -d "$TMP"; then
-    echo "压缩包里没有 anlandx.tar.gz —— 版本 ${ANLAND_TAG} 的产物结构和预期不符" >&2
     exit 1
 fi
 tar xzf "$TMP/anlandx.tar.gz" -C "$TMP"

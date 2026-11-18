@@ -99,20 +99,43 @@ Anland 6.x needs **four** host-side pieces. Missing any one means no picture:
 | 3 | `anland-shell.apk` | `pm install` + **grant root** | `com.anland.shell`: launcher, lists containers/apps and starts them | no entry point to launch apps |
 | 4 | `anlandx.tar.gz` | **already baked into this image** | the container-side `anlandx` session | no `anland-session` in the container |
 
-Items 1–3 come from the [Anland 6.2 release](https://github.com/SuperTurtleDev/anland/releases/tag/6.2)
-(`anland-build.2.zip`). Item 4 is installed during the image build; only foreign
-images need `tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh`.
+Items 1–3 come from the **[misaka5202/anland 6.2-ds2
+release](https://github.com/misaka5202/anland/releases/tag/6.2-ds2)** — the fork,
+not upstream, because upstream 6.2 cannot type (see below). Item 4 is installed
+during the image build; only foreign images need
+`tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh`.
 
 ### Download list
 
-**Only `anland-shell.apk` needs the patched build** — upstream has not shipped a fix.
+**Items 1, 2 and 4 must come from the fork** — upstream 6.2 has input defects
+that make the desktop unusable (next section). `anland-shell.apk` also needs a
+patched build for a different reason.
 
 | File | Where | Direct link |
 | --- | --- | --- |
-| `module/anland-awl.zip` | Anland 6.2 release, extracted from `anland-build.2.zip` | [SuperTurtleDev/anland 6.2](https://github.com/SuperTurtleDev/anland/releases/tag/6.2) |
-| `anland-wayland.apk` | same archive | same |
+| `module/anland-awl.zip` | **fork, not upstream** | [misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2) |
+| `anland-wayland.apk` | **fork, not upstream** | same |
 | **`anland-shell.apk`** | **patched build, not upstream 1.1** | **[misaka5202/anland-shell v1.1-ds72](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)** |
-| `anlandx.tar.gz` | already baked into this image | — |
+| `anlandx.tar.gz` | **fork** (also baked into this image) | [misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2) |
+
+**Why items 1, 2 and 4 must come from the fork**
+
+Upstream 6.2 has three defects that make desktop input unusable:
+
+1. **Soft-keyboard text never reaches apps.** Apps that do not implement
+   `zwp_text_input_v3` (terminals such as Konsole/XTerm) receive nothing:
+   `awl_ime_text()` drops the commit when no text-input object is enabled.
+   The fork degrades ASCII text to `wl_keyboard` key events — the same path the
+   Enter key already uses.
+2. **Chinese input is impossible.** No `zwp_input_method_v2`, so a container
+   IME (fcitx5) has no way to deliver composed text. The fork implements it.
+3. **The extra-keys bar is partly dead.** Its leftmost column (ESC/TAB) sits in
+   the system back-gesture region and the touch is swallowed. The fork insets
+   the bar by `WindowInsets.Type.systemGestures()`.
+
+Also included: the 5.x UI port (extra-keys bar, immersive mode with adjustable
+opacity), i18n for the added strings, and a complete evdev scan-code mapping
+for IME-synthesised key events (they always carry `scanCode == 0`).
 
 **Why anland-shell needs the patched build**
 
@@ -145,9 +168,10 @@ su -c 'droidspaces show --format'  # "Unknown or incomplete option"
 > `setup-anland6-host.sh` reads the Droidspaces version and downloads `v1.1-ds72`
 > automatically when it is ≥ 7.2.0, so you do not have to pick.
 
-**① Flash `anland-awl` and reboot.** Take `anland-build.2.zip` from the
-[Anland 6.2 release](https://github.com/SuperTurtleDev/anland/releases/tag/6.2),
-extract `module/anland-awl.zip`, flash it with KernelSU/APatch.
+**① Flash `anland-awl` and reboot.** Download
+[`anland-awl.zip`](https://github.com/misaka5202/anland/releases/tag/6.2-ds2)
+from the fork release (upstream 6.2 has the input defects described above),
+flash it with KernelSU/APatch.
 
 **The reboot is mandatory.** While the module sits in `modules_update/`,
 `waylandbridge` never runs and `/data/local/tmp/awl/wayland-0` does not exist —

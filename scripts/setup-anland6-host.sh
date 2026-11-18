@@ -52,6 +52,13 @@ SC_ENABLED=0
 # 官方的 1.1 在 7.2.0 上容器列表失效；这个包先试 --json 再回退 --format。
 SHELL_APK_URL="https://github.com/misaka5202/anland-shell/releases/download/v1.1-ds72/anland-shell.apk"
 
+# 宿主模块 / APK 的来源：改版（misaka5202/anland）。
+# 上游 6.2 的整包叫 anland-build.2.zip（module/anland-awl.zip 在里面）；
+# 改版从 6.2-ds2 起直接发独立文件，所以这里按独立文件下载。
+AWL_RELEASE_REPO="${AWL_RELEASE_REPO:-misaka5202/anland}"
+AWL_RELEASE_TAG="${AWL_RELEASE_TAG:-6.2-ds2}"
+AWL_RELEASE_URL="https://github.com/${AWL_RELEASE_REPO}/releases/download/${AWL_RELEASE_TAG}"
+
 WORK=""
 DRY_RUN=0
 SKIP_SHELL=0
@@ -165,16 +172,9 @@ else
         if [ -z "$ZIP" ] && [ "$NO_DOWNLOAD" -eq 0 ]; then
             say "$(printf "$M_NO_LOCAL_ZIP" "$AWL_MODULE_ID")"
             if command -v curl >/dev/null 2>&1; then
-                curl -sSL --max-time 120 -o "$WORK/$AWL_MODULE_ID.zip" \
-                    "https://github.com/SuperTurtleDev/anland/releases/download/6.2/anland-build.2.zip" \
-                    >/dev/null 2>&1 || true
-                # 上面下的是整包，需要解出 module/anland-awl.zip
-                if [ -s "$WORK/$AWL_MODULE_ID.zip" ]; then
-                    if command -v unzip >/dev/null 2>&1; then
-                        ( cd "$WORK" && unzip -o -q "$AWL_MODULE_ID.zip" 'module/anland-awl.zip' 2>/dev/null )
-                        [ -f "$WORK/module/anland-awl.zip" ] && ZIP="$WORK/module/anland-awl.zip"
-                    fi
-                fi
+                curl -fsSL --max-time 180 -o "$WORK/$AWL_MODULE_ID.zip" \
+                    "$AWL_RELEASE_URL/anland-awl.zip" >/dev/null 2>&1 || true
+                [ -s "$WORK/$AWL_MODULE_ID.zip" ] && ZIP="$WORK/$AWL_MODULE_ID.zip"
             fi
         fi
 
@@ -227,12 +227,9 @@ else
 
     if [ -z "$APK" ] && [ "$NO_DOWNLOAD" -eq 0 ] && command -v curl >/dev/null 2>&1; then
         say "$M_DL_WAYLAND"
-        curl -sSL --max-time 120 -o "$WORK/bundle.zip" \
-            "https://github.com/SuperTurtleDev/anland/releases/download/6.2/anland-build.2.zip" >/dev/null 2>&1 || true
-        if [ -s "$WORK/bundle.zip" ] && command -v unzip >/dev/null 2>&1; then
-            ( cd "$WORK" && unzip -o -q bundle.zip 'anland-wayland.apk' 2>/dev/null )
-            [ -f "$WORK/anland-wayland.apk" ] && APK="$WORK/anland-wayland.apk"
-        fi
+        curl -fsSL --max-time 180 -o "$WORK/anland-wayland.apk" \
+            "$AWL_RELEASE_URL/anland-wayland.apk" >/dev/null 2>&1 || true
+        [ -s "$WORK/anland-wayland.apk" ] && APK="$WORK/anland-wayland.apk"
     fi
 
     if [ -n "$APK" ]; then

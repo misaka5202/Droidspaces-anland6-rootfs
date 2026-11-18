@@ -45,10 +45,36 @@ Host-side components, their roles and how they fail are covered in
 
 | File | Source | Purpose |
 | --- | --- | --- |
-| `module/anland-awl.zip` | [anland 6.2](https://github.com/SuperTurtleDev/anland/releases/tag/6.2), extract `anland-build.2.zip` | the `waylandbridge` daemon |
-| `anland-wayland.apk` | same | `com.anlandnext`, the window consumer |
+| `module/anland-awl.zip` | **[misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2)** | the `waylandbridge` daemon, with the IME fixes |
+| `anland-wayland.apk` | same | `com.anlandnext`, the window consumer, with the extra-keys bar |
 | `anland-shell.apk` | **[misaka5202/anland-shell v1.1-ds72](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)** | patched build, see below |
-| `anlandx.tar.gz` | already inside the images built here | the `anlandx` session inside the container |
+| `anlandx.tar.gz` | **[misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2)** (also already inside the images built here) | the `anlandx` session inside the container |
+
+### Why the modified build (misaka5202/anland)
+
+The fork is required, not optional. Upstream 6.2 has three defects that make
+desktop input unusable:
+
+1. **Soft-keyboard text never reaches apps.** Apps that do not implement
+   `zwp_text_input_v3` (terminals such as Konsole/XTerm) receive nothing:
+   `awl_ime_text()` drops the commit when no text-input object is enabled.
+   The fork degrades ASCII text to `wl_keyboard` key events, a path that was
+   already proven to work (the Enter key uses it).
+2. **Chinese input is impossible.** The daemon implements no
+   `zwp_input_method_v2`, so a container IME (fcitx5) has no way to deliver
+   composed text. The fork implements it.
+3. **The extra-keys bar is partly dead.** Its leftmost column (ESC/TAB) sits
+   inside the system back-gesture region, so the gesture swallows the touch.
+   The fork insets the bar by `WindowInsets.Type.systemGestures()`.
+
+Also included: the 5.x UI port (extra-keys bar, immersive mode with adjustable
+opacity), i18n for the added strings, and a complete evdev scan-code mapping
+for IME-synthesised key events (they always carry `scanCode == 0`).
+
+Built from `main`; `6.2-ds2` is the current release. If you only need the
+stock 6.2 behaviour, use
+[SuperTurtleDev/anland 6.2](https://github.com/SuperTurtleDev/anland/releases/tag/6.2)
+instead — but expect the input problems above.
 
 ### anland-shell needs the patched build
 
