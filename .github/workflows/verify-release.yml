@@ -1,28 +1,28 @@
-name: 校验 Release 产物完整性
+name: Verify Release asset integrity
 
-# 手动触发：把指定 tag 的产物下载下来跑 xz -t，回答「这个包到底坏没坏」。
+# Manual dispatch: download the tagged assets and run xz -t to answer "is this archive corrupt or not".
 #
-# 为什么要在 CI 里做：从国内经 GitHub 缓存节点下 832MB 的包会被反复截断，
-# 本地很难拿到一份完整副本。runner 访问 GitHub 是内网的，几秒就下完。
+# Why in CI: an 832 MB archive fetched via the GitHub relay from CN networks is repeatedly truncated,
+# and a complete local copy is hard to get. Runners reach GitHub over the internal network and download it in seconds.
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: '要校验的 release tag（例如 v20261115-124300）'
+        description: 'The release tag to verify (e.g. v20261115-124300)'
         required: true
         type: string
       asset_pattern:
-        description: '只校验匹配的资产（留空=全部 .tar.xz）'
+        description: 'Only verify matching assets (empty = all .tar.xz)'
         required: false
         type: string
         default: '*.tar.xz'
 
 jobs:
   verify:
-    name: 下载并校验
+    name: Download and verify
     runs-on: ubuntu-24.04-arm
     steps:
-      - name: 下载资产
+      - name: Download assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -32,36 +32,36 @@ jobs:
              --repo "${{ github.repository }}" \
              --pattern "${{ inputs.asset_pattern }}" \
              --dir dl --clobber
-          echo "--- 下载结果 ---"
+          echo "--- download results ---"
           ls -l dl/
 
-      - name: xz -t 校验
+      - name: xz -t verification
         run: |
           set -uo pipefail
           fail=0
           for f in dl/*; do
             [ -f "$f" ] || continue
             sz=$(stat -c %s "$f")
-            echo "=== $(basename "$f")   $sz 字节 ==="
-            # 页脚（xz 以 59 5a 'YZ' 结尾）
-            echo -n "  尾部 12 字节: "; tail -c 12 "$f" | od -An -tx1 | tr -d '\n'; echo
+            echo "=== $(basename "$f")   $sz bytes ==="
+            # footer (xz ends with 59 5a 'YZ')
+            echo -n "  last 12 bytes: "; tail -c 12 "$f" | od -An -tx1 | tr -d '\n'; echo
             if xz -t "$f" 2>&1; then
-              echo "  ✅ xz -t 通过（流完整）"
+              echo "  OK xz -t passed (stream intact)"
             else
-              echo "  ❌ xz -t 失败"
+              echo "  FAILED xz -t"
               fail=1
             fi
             echo -n "  sha256: "; sha256sum "$f" | awk '{print $1}'
           done
           if [ "$fail" -ne 0 ]; then
-            echo "::error:: 有产物压缩流损坏"
+            echo "::error:: one or more assets have a corrupt compression stream"
             exit 1
           fi
-          echo "✅ 全部通过"
+          echo "all passed"
 
-      - name: 同时检查 artifact 里的副本
+      - name: Also check the artifact copies
         run: |
-          # release 里的资产是 artifact 中转过来的。如果这里能拿到原始 artifact，
-          # 就能定位损坏发生在中转前还是中转后。
-          echo "这一步留作扩展：如需对比 artifact 与 release 资产，"
-          echo "可在 build 运行时另存一份 artifact 再比对。"
+          # Release assets arrive via the artifact relay. If the original artifacts are
+          # reachable here, one can tell whether corruption happened before or after the relay.
+          echo "This step is left as an extension: to compare artifact vs release assets,"
+          echo "keep an extra copy of the artifacts from the build run and diff them."

@@ -1,20 +1,20 @@
-name: 发布全桌面 Wayland RootFS（高通 + MTK 双版本）
+name: Publish All-Wayland RootFS (Qualcomm + MediaTek)
 
 on:
   workflow_dispatch:
     inputs:
       sync_cnb:
-        description: 构建后同步中文资产到 CNB
+        description: Sync zh assets to CNB after building
         required: false
         default: false
         type: boolean
       sync_cnb_only:
-        description: 跳过构建，仅同步已有 GitHub Release 到 CNB
+        description: Skip building; sync an existing GitHub Release to CNB only
         required: false
         default: false
         type: boolean
       gpu_vendor:
-        description: 构建哪个 GPU 版本
+        description: Which GPU variant to build
         required: true
         default: both
         type: choice
@@ -23,27 +23,27 @@ on:
           - qualcomm
           - mediatek
       publish_release:
-        description: 是否更新 GitHub Release（小测设 false，只产 artifact）
+        description: Whether to update the GitHub Release (set false for small tests; artifacts only)
         required: false
         type: boolean
         default: true
       desktop:
-        description: 构建哪个桌面环境（all-wayland 为全量，或指定单个如 kde-mobile）
+        description: Which desktop to build (all-wayland for the full matrix, or a single one such as kde-mobile)
         required: true
         default: all-wayland
         type: string
       custom_release_tag:
-        description: 发布到哪个 tag（留空则用滚动 tag；单桌面测试建议填独立 tag）
+        description: Which tag to publish to (empty = the rolling tag; use a dedicated tag for single-desktop tests)
         required: false
         default: ''
         type: string
       skip_prune:
-        description: 跳过删除 Release 里本次未构建的旧资产（单桌面测试务必开启）
+        description: Skip pruning old Release assets not built this run (enable for single-desktop tests)
         required: false
         default: false
         type: boolean
       language:
-        description: 构建哪种语言
+        description: Which language to build
         required: true
         default: zh
         type: choice
@@ -52,12 +52,12 @@ on:
           - en
           - both
       release_tag:
-        description: 仅同步模式使用的 GitHub Release 标签
+        description: GitHub Release tag used in sync-only mode
         required: true
         default: droidspaces-rootfs-all-wayland
         type: string
       upload_concurrency:
-        description: CNB 并发上传数
+        description: CNB concurrent upload count
         required: true
         default: 9999
         type: number
@@ -77,7 +77,7 @@ env:
 
 jobs:
   prepare:
-    name: 准备统一版本
+    name: Prepare unified versions
     if: ${{ inputs.sync_cnb_only != true }}
     runs-on: ubuntu-latest
     outputs:
@@ -93,7 +93,7 @@ jobs:
           printf 'build_time=%s\n' "$build_time" >> "$GITHUB_OUTPUT"
 
   build-zh-qualcomm:
-    name: 构建 中文 / 高通 Adreno
+    name: Build zh / Qualcomm Adreno
     if: ${{ inputs.sync_cnb_only != true && (inputs.language == 'zh' || inputs.language == 'both') && (inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'qualcomm') }}
     needs: prepare
     uses: ./.github/workflows/build-rootfs-core.yml
@@ -123,7 +123,7 @@ jobs:
       gpu_vendor: qualcomm
 
   build-zh-mediatek:
-    name: 构建 中文 / MTK Mali
+    name: Build zh / MediaTek Mali
     if: ${{ inputs.sync_cnb_only != true && (inputs.language == 'zh' || inputs.language == 'both') && (inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'mediatek') }}
     needs: prepare
     uses: ./.github/workflows/build-rootfs-core.yml
@@ -153,7 +153,7 @@ jobs:
       gpu_vendor: mediatek
 
   build-en-qualcomm:
-    name: 构建 英文 / 高通 Adreno
+    name: Build en / Qualcomm Adreno
     if: ${{ inputs.sync_cnb_only != true && (inputs.language == 'en' || inputs.language == 'both') && (inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'qualcomm') }}
     needs: prepare
     uses: ./.github/workflows/build-rootfs-core.yml
@@ -183,7 +183,7 @@ jobs:
       gpu_vendor: qualcomm
 
   build-en-mediatek:
-    name: 构建 英文 / MTK Mali
+    name: Build en / MediaTek Mali
     if: ${{ inputs.sync_cnb_only != true && (inputs.language == 'en' || inputs.language == 'both') && (inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'mediatek') }}
     needs: prepare
     uses: ./.github/workflows/build-rootfs-core.yml
@@ -213,34 +213,34 @@ jobs:
       gpu_vendor: mediatek
 
   release:
-    name: 更新 GitHub 滚动 Release
+    name: Update the GitHub rolling Release
     needs: [prepare, build-zh-qualcomm, build-zh-mediatek, build-en-qualcomm, build-en-mediatek]
     if: ${{ !cancelled() && inputs.sync_cnb_only != true && inputs.publish_release != true }}
     runs-on: ubuntu-latest
     env:
-      # 单桌面测试用独立 tag，避免污染全量滚动 Release
+      # Single-desktop tests use a dedicated tag to avoid polluting the rolling Release
       RELEASE_TAG: ${{ inputs.custom_release_tag || 'droidspaces-rootfs-all-wayland' }}
       SKIP_PRUNE: ${{ inputs.skip_prune }}
     steps:
       - uses: actions/checkout@v5
 
-      - name: 下载全部构建产物
+      - name: Download all build artifacts
         uses: actions/download-artifact@v7
         with:
           pattern: '*-rootfs'
           merge-multiple: true
           path: release-assets
 
-      - name: 生成双语索引
+      - name: Generate manifests and release notes
         env:
           BUILD_ID: ${{ needs.prepare.outputs.build_id }}
           BUILD_TIME: ${{ needs.prepare.outputs.build_time }}
         run: |
           set -euo pipefail
           archive_count=$(find release-assets -maxdepth 1 -name '*.tar.xz' | wc -l)
-          echo "本次产物数量: $archive_count"
-          [ "$archive_count" -gt 0 ] || { echo "没有拿到任何 RootFS 产物" >&2; exit 1; }
-          # 只对实际有产物的语言生成清单（language 输入可能只选一种）
+          echo "Archive count: $archive_count"
+          [ "$archive_count" -gt 0 ] || { echo "No RootFS artifacts produced" >&2; exit 1; }
+          # Only generate manifests for languages that produced artifacts (the language input may select one)
           manifests=()
           for lang in zh en; do
             if ls release-assets/*-"$lang".tar.xz >/dev/null 2>&1; then
@@ -251,10 +251,10 @@ jobs:
                 --output "release-assets/rootfs_${lang}.json"
               manifests+=("release-assets/rootfs_${lang}.json")
             else
-              echo "没有 $lang 产物，跳过 rootfs_${lang}.json"
+              echo "No $lang artifacts, skipping rootfs_${lang}.json"
             fi
           done
-          [ ${#manifests[@]} -gt 0 ] || { echo "没有任何 manifest 可生成" >&2; exit 1; }
+          [ ${#manifests[@]} -gt 0 ] || { echo "No manifests to generate" >&2; exit 1; }
           jq -s 'add | sort_by(.language, .distro, .name, .architecture)' \
             "${manifests[@]}" > release-assets/rootfs.json
 
@@ -269,26 +269,16 @@ jobs:
           Each combination is available in Chinese and English and in both GPU variants; the number of archives in this release is listed under build information below. Use `rootfs_en.json` or `rootfs_zh.json` as the subscription manifest in Droidspaces RootFS management. The manifests include version, file size, SHA-256 checksum, and download URL for each image. Qualcomm images use Adreno hardware acceleration; MediaTek images use libhybris to drive the vendor Mali driver on /dev/mali0, so the host needs droidspaces-lkm with mali_nsfix loaded first. Without it the container cannot create a GPU context and eglInitialize returns 0x3001.
 
           The images are built for ARM64 and include Droidspaces desktop auto-start and Qualcomm Adreno/Mesa support. This rolling release is refreshed by the scheduled weekly build.
-
-          ## 中文
-
-          面向 Droidspaces 的 ARM64 滚动 RootFS 集合，覆盖 40 种发行版与桌面环境组合，分高通 Adreno 与 MTK 两个版本：
-          - 发行版：Debian 13、Ubuntu 26.04、Fedora 43、Fedora 44 和 Arch Linux。
-          - Anland Wayland 桌面：KDE Plasma、KDE Plasma Mobile、GNOME、Anland Next、Niri、Hyprland、Mango 和 Denial。
-
-          每种组合均提供中文和英文版本，并且都有高通与 MTK 两个变体，本次发布实际的镜像数量见下方构建信息。在 Droidspaces RootFS 管理中添加 `rootfs_zh.json` 或 `rootfs_en.json` 订阅清单即可。清单包含每个镜像的版本、文件大小、SHA-256 校验值和下载地址。高通版使用 Adreno 硬件加速；MTK 版通过 libhybris 直接使用厂商 Mali 驱动（/dev/mali0），宿主机需先安装 droidspaces-lkm 并加载 mali_nsfix；缺少它时容器建不了 GPU context，eglInitialize 返回 0x3001。
-
-          镜像面向 ARM64 构建，包含 Droidspaces 桌面自动启动配置和高通 Adreno/Mesa 支持。本滚动 Release 由每周定时构建更新。
           EOF
           {
-            printf '\n## Build information / 构建信息\n\n'
+            printf '\n## Build information\n\n'
             printf '%s\n' \
-              "- Build ID / 构建标识: $BUILD_ID" \
-              "- Build time (UTC) / 构建时间（UTC）: $BUILD_TIME" \
-              "- Release tag / 滚动标签: $RELEASE_TAG" \
-              '- Architecture / 架构: ARM64' \
-              "- Archives / 镜像数量: $archive_count / 共 $archive_count 个" \
-            printf '\n## Direct download index / 全部 RootFS 地址索引\n\n'
+              "- Build ID: $BUILD_ID" \
+              "- Build time (UTC): $BUILD_TIME" \
+              "- Release tag: $RELEASE_TAG" \
+              '- Architecture: ARM64' \
+              "- Archives: $archive_count" \
+            printf '\n## Direct download index\n\n'
             printf '%s\n' \
               "- [Complete index: rootfs.json](https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/rootfs.json) — every RootFS download address in this release." \
               "- [English subscription index: rootfs_en.json](https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/rootfs_en.json)" \
@@ -296,7 +286,7 @@ jobs:
           } >> "$notes_file"
           echo "ROOTFS_RELEASE_NOTES_FILE=$notes_file" >> "$GITHUB_ENV"
 
-      - name: 创建或更新滚动 Release
+      - name: Create or update the rolling Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -304,11 +294,11 @@ jobs:
           release_notes="$(cat "$ROOTFS_RELEASE_NOTES_FILE")"
           tag_ref="repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG"
           if gh api "$tag_ref" >/dev/null 2>&1; then
-            echo "更新已有滚动 tag：$RELEASE_TAG"
+            echo "Updating the existing rolling tag: $RELEASE_TAG"
             gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$RELEASE_TAG" \
               -f sha="$GITHUB_SHA" -F force=true
           else
-            echo "创建滚动 tag：$RELEASE_TAG"
+            echo "Creating the rolling tag: $RELEASE_TAG"
             gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
               -f ref="refs/tags/$RELEASE_TAG" -f sha="$GITHUB_SHA"
           fi
@@ -318,13 +308,13 @@ jobs:
           if ! jq -e --arg tag "$RELEASE_TAG" 'any(.[]; .tag_name == $tag)' "$release_list" >/dev/null; then
             gh release create "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
-              --title "Droidspaces 全桌面 Wayland RootFS" \
+              --title "Droidspaces All-Wayland RootFS" \
               --notes "$release_notes" \
               --draft \
               --latest=false
           fi
 
-      - name: 上传 RootFS 资产
+      - name: Upload RootFS assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -332,13 +322,13 @@ jobs:
           mapfile -t archives < <(find release-assets -maxdepth 1 -type f -name '*.tar.xz' -print | sort)
           [ "${#archives[@]}" -gt 0 ]
           gh release upload "$RELEASE_TAG" "${archives[@]}" --repo "$GITHUB_REPOSITORY" --clobber
-          # 只上传实际生成了的清单（language 可能只选一种）
+          # Upload only manifests actually generated (the language input may select one)
           mapfile -t manifests < <(find release-assets -maxdepth 1 -type f -name 'rootfs*.json' -print | sort)
-          [ "${#manifests[@]}" -gt 0 ] || { echo "没有清单可上传" >&2; exit 1; }
-          printf '上传清单: %s\n' "${manifests[@]}"
+          [ "${#manifests[@]}" -gt 0 ] || { echo "No manifests to upload" >&2; exit 1; }
+          printf 'Manifests: %s\n' "${manifests[@]}"
           gh release upload "$RELEASE_TAG" "${manifests[@]}" --repo "$GITHUB_REPOSITORY" --clobber
 
-      - name: 删除旧资产并发布 Release
+      - name: Prune old assets and publish the Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -350,10 +340,10 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -ce \
             --arg tag "$RELEASE_TAG" '
               [.[] | select(.tag_name == $tag)]
-              | if length == 1 then .[0] else error("滚动 Release 不唯一") end
+              | if length == 1 then .[0] else error("rolling Release is not unique") end
             ' > "$release_json"
           if [ "${SKIP_PRUNE:-false}" = "true" ]; then
-            echo "SKIP_PRUNE=true，跳过清理旧资产"
+            echo "SKIP_PRUNE=true, skipping old-asset pruning"
           else
             while IFS=$'\t' read -r asset_id asset_name; do
               if ! grep -Fqx -- "$asset_name" "$expected"; then
@@ -363,26 +353,26 @@ jobs:
           fi
           gh release edit "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Droidspaces 全桌面 Wayland RootFS" \
+            --title "Droidspaces All-Wayland RootFS" \
             --notes "$release_notes" \
             --draft=false --prerelease=false --latest=false
 
   sync-cnb:
-    name: 同步中文资产到 CNB
+    name: Sync zh assets to CNB
     if: ${{ !cancelled() && inputs.sync_cnb == true && inputs.sync_cnb_only != true && inputs.publish_release != true }}
     needs: [prepare, build-zh-qualcomm, build-zh-mediatek, build-en-qualcomm, build-en-mediatek]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
-      - name: 下载中文 RootFS 构建产物
+      - name: Download zh RootFS build artifacts
         uses: actions/download-artifact@v7
         with:
           pattern: '*-zh-*-rootfs'
           merge-multiple: true
           path: cnb-assets
 
-      - name: 生成 CNB 中文索引
+      - name: Generate the CNB zh index
         env:
           CNB_REPO: ${{ vars.CNB_REPO }}
         run: |
@@ -394,7 +384,7 @@ jobs:
             --output cnb-assets/rootfs_zh.json
           jq . cnb-assets/rootfs_zh.json > cnb-assets/rootfs.json
 
-      - name: 上传中文资产到 CNB
+      - name: Upload zh assets to CNB
         env:
           GH_TOKEN: ${{ github.token }}
           CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
@@ -407,7 +397,7 @@ jobs:
         run: bash scripts/publish-cnb-rootfs.sh "$RELEASE_TAG"
 
   sync-cnb-only:
-    name: 仅同步已有 Release 到 CNB
+    name: Sync an existing Release to CNB only
     if: ${{ inputs.sync_cnb_only == true }}
     runs-on: ubuntu-latest
     env:
@@ -415,7 +405,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: 同步中文资产到 CNB
+      - name: Sync zh assets to CNB
         env:
           GH_TOKEN: ${{ github.token }}
           CNB_TOKEN: ${{ secrets.CNB_TOKEN }}

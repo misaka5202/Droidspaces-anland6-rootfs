@@ -1,10 +1,10 @@
-name: 编译并发布 Droidspaces RootFS
+name: Build and publish Droidspaces RootFS
 
 on:
   workflow_dispatch:
     inputs:
       build_target:
-        description: 选择要构建的发行版
+        description: Distro to build
         required: true
         type: choice
         default: Debian-13
@@ -19,12 +19,12 @@ on:
           - all
           - all-wayland
       custom_username:
-        description: 自定义用户名
+        description: Custom username
         required: false
         type: string
         default: Gold
       desktop:
-        description: 主桌面（负责开机自启动的桌面）
+        description: Primary desktop (the one with autostart)
         required: true
         type: choice
         default: KDE
@@ -39,17 +39,17 @@ on:
           - Mango
           - Denial
       extra_desktops:
-        description: "额外桌面，用逗号分隔（例如 Niri,Hyprland）"
+        description: "Extra desktops, comma-separated (e.g. Niri,Hyprland)"
         required: false
         type: string
         default: ""
       desktop_autostart:
-        description: 桌面开机自启动（桌面为 none 时自动关闭）
+        description: Desktop autostart (disabled automatically when the desktop is none)
         required: true
         type: boolean
         default: true
       display_backend:
-        description: 显示后端（KDE mobile/GNOME/Anland Next/Niri/Hyprland/Mango/Denial 固定使用 Anland Wayland）
+        description: Display backend (KDE mobile/GNOME/Anland Next/Niri/Hyprland/Mango/Denial always use Anland Wayland)
         required: true
         type: choice
         default: anland-wayland
@@ -57,7 +57,7 @@ on:
           - x11
           - anland-wayland
       PulseAudio:
-        description: PulseAudio 音频转发
+        description: PulseAudio audio forwarding
         required: true
         type: choice
         default: socket
@@ -66,67 +66,67 @@ on:
           - tcp
           - none
       enable_zh_tz:
-        description: 使用中文并设置上海时区
+        description: Chinese UI + Shanghai timezone
         required: true
         type: boolean
         default: true
       enable_mesa:
-        description: 开启高通骁龙 GPU 支持
+        description: Qualcomm Snapdragon GPU support
         required: true
         type: boolean
         default: true
       enable_8gen2_wayland:
-        description: 修复骁龙 8 Gen 2 Wayland 花屏
+        description: Fix Snapdragon 8 Gen 2 Wayland display glitch
         required: true
         type: boolean
         default: false
       nosnap:
-        description: 移除 Ubuntu Snap
+        description: Remove Ubuntu Snap
         required: true
         type: boolean
         default: true
       enable_systemd257:
-        description: 使用 systemd 257 包族（仅支持 none 和普通 KDE）
+        description: systemd 257 package family (only none and plain KDE)
         required: true
         type: boolean
         default: false
       enable_srf:
-        description: 开启 fcitx5 输入法
+        description: Fcitx5 input method
         required: true
         type: boolean
         default: true
       enable_binfmt:
-        description: 开启跨架构支持
+        description: Cross-architecture support
         required: true
         type: boolean
         default: false
       enable_yj:
-        description: 开启 NAT 和硬件识别
+        description: NAT and hardware identification
         required: true
         type: boolean
         default: true
       enable_kfgj:
-        description: 安装开发工具
+        description: Developer tools
         required: true
         type: boolean
         default: false
       enable_zip:
-        description: 安装压缩工具
+        description: Compression tools
         required: true
         type: boolean
         default: true
       enable_docker:
-        description: 安装 Docker
+        description: Docker
         required: true
         type: boolean
         default: false
       wayland_package_repository:
-        description: Wayland 软件包仓库（公开的 owner/repository）
+        description: Wayland package repository (public owner/repo)
         required: true
         type: string
         default: Goldzxcbug/droidspaces-package
       anland_major:
-        description: 'Anland 主版本（6=anlandx 会话，5=旧版 patched KWin）'
+        description: 'Anland major version (6 = anlandx session, 5 = legacy patched KWin)'
         required: false
         type: choice
         default: '6'
@@ -134,12 +134,12 @@ on:
           - '6'
           - '5'
       anland6_version:
-        description: 'Anland 6.x 的 release tag'
+        description: 'The anland 6.x release tag'
         required: false
         type: string
         default: '6.2'
       gpu_vendor:
-        description: GPU 厂商（qualcomm=Adreno 硬件加速；mediatek=libhybris + /dev/mali0，需 mali_nsfix）
+        description: GPU vendor (qualcomm = Adreno hardware acceleration; mediatek = libhybris + /dev/mali0, requires mali_nsfix)
         required: true
         type: choice
         default: qualcomm
@@ -152,7 +152,7 @@ permissions:
 
 jobs:
   build:
-    name: 构建
+    name: Build
     uses: ./.github/workflows/build-rootfs-core.yml
     with:
       ui_language: zh
