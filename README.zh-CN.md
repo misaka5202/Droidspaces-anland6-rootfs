@@ -1,14 +1,27 @@
-# Droidspaces Anland 6.x RootFS 构建器
+> **为 [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) 构建
+> 面向 Anland 6.x 的 Linux RootFS 镜像——高通 / MTK 双版本**：Adreno 走 Mesa
+> freedreno/turnip，Mali 走 libhybris 驱动厂商驱动；镜像内置容器侧的
+> `anlandx` 会话。
 
-[English](README.md) · [Documentation](docs/zh/README.md)
+> [English](README.md) · [Documentation](docs/zh/README.md)
 
-为 [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) 构建**面向 Anland 6.x** 的 Linux RootFS 镜像，高通 / MTK 双版本，中文界面。
+---
 
-## 快速开始
+## 文档索引
+
+| 文档 | 内容 |
+|---|---|
+| [桌面与 Anland 指南](docs/zh/桌面与Anland.md) | Mali 设备额外要求、daemon 日志定位、tmpfs 限制 |
+| [droidspaces-lkm](https://github.com/misaka5202/droidspaces-lkm) | 本镜像依赖的内核模块（mali_nsfix 等） |
+| [anland](https://github.com/SuperTurtleDev/anland) | 显示协议上游（发布请用改版） |
+
+---
+## 1. 快速开始
 
 系统需求：root（KernelSU / APatch / Magisk）、Droidspaces、arm64。
-MTK / Mali 设备另需 [droidspaces-lkm](https://github.com/misaka5202/droidspaces-lkm)：
-它带 `mali_nsfix.ko`，在 Mali 平台上自动加载。
+> [!IMPORTANT]
+> MTK / Mali 设备另需 [droidspaces-lkm](https://github.com/misaka5202/droidspaces-lkm)：
+> 它带 `mali_nsfix.ko`，在 Mali 平台上自动加载。
 
 标准 MTK 镜像通过 libhybris 直接使用厂商 Mali 驱动（`/dev/mali0`），这就是硬件
 加速的来源；`mali_nsfix` 是它的前提 —— 没有它时 `mali_kbase` 在 PID 命名空间里
@@ -34,9 +47,11 @@ adb shell su -c 'sh /data/local/tmp/verify-anland6-host.sh'
 启动应用走 `anland-shell`：容器 → `START` → `APPS` → 应用。每个应用对应一个
 独立 Android 窗口（`AwlWindowActivity`），入最近任务、可分屏、独立 IME 状态。
 
-宿主侧组件、职责与缺失表现见[宿主侧准备](#宿主侧准备)。
+宿主侧组件、职责与缺失表现见[宿主侧准备](#4-宿主侧准备)。
 
-## 下载清单
+---
+
+## 2. 下载清单
 
 | 文件 | 来源 | 说明 |
 | --- | --- | --- |
@@ -76,7 +91,7 @@ i18n、以及 IME 合成按键的 evdev 码完整映射（它们恒为 `scanCode
 [SuperTurtleDev/anland 6.2](https://github.com/SuperTurtleDev/anland/releases/tag/6.2)
 —— 但上面三个输入问题会复现。
 
-### anland-shell 需用补丁版
+### 2.1 anland-shell 需用补丁版
 
 上游 1.1（2026-09-17）调用 `droidspaces show --format`：
 
@@ -103,7 +118,9 @@ su -c 'droidspaces show --format'  # Unknown or incomplete option
 
 `setup-anland6-host.sh` 读取 Droidspaces 版本，≥7.2.0 时自动取补丁版。
 
-## 和 5.x 版本的区别
+---
+
+## 3. 与 5.x 版本的区别
 
 | | Anland 5.x（旧路线） | Anland 6.x（本仓库） |
 |---|---|---|
@@ -117,7 +134,9 @@ su -c 'droidspaces show --format'  # Unknown or incomplete option
 `kwin_wayland` 二进制里一个 anland 字样都没有，结果是会话起来了但画面没有出口。
 本仓库走 6.x 路线，绕开这个死胡同。
 
-## 宿主侧准备
+---
+
+## 4. 宿主侧准备
 
 宿主侧四件，缺任一件无画面。
 
@@ -134,7 +153,7 @@ su -c 'droidspaces show --format'  # Unknown or incomplete option
 tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh
 ```
 
-### 自动配置
+### 4.1 自动配置
 
 ```bash
 adb push scripts/setup-anland6-host.sh /data/local/tmp/
@@ -144,12 +163,13 @@ adb shell su -c 'sh /data/local/tmp/setup-anland6-host.sh'
 幂等。执行内容：模块安装（`ksud module install` 或解压到 `/data/adb/modules/`）、
 APK 安装、daemon 配置写入（`auto_attach=1`、`scale_mode=1`）、容器绑定挂载补写。
 
-### 手动配置
+### 4.2 手动配置
 
 **1. `anland-awl` 模块**
 
-刷入后必须重启。模块滞留 `modules_update/` 时 `waylandbridge` 不运行，
-`/data/local/tmp/awl/wayland-0` 不存在。重启后校验：
+> [!CAUTION]
+> 刷入后必须重启。模块滞留 `modules_update/` 时 `waylandbridge` 不运行，
+> `/data/local/tmp/awl/wayland-0` 不存在。重启后校验：
 
 ```bash
 su -c 'pidof waylandbridge'
@@ -199,11 +219,14 @@ Droidspaces 二进制无 `/run/anland` 处理逻辑（`strings` 命中 0），�
 
 启用硬件访问（`--hw-access` / `--gpu`）、特权模式，勾选 `nocaps`、`noseccomp`。
 
-## 应用启动
+---
 
-经 `anland-shell` 启动，不在容器内手动拉起进程。宿主 daemon 需要客户端
-携带完整会话环境：`anland-shell` 注入 `XDG_RUNTIME_DIR`、`WAYLAND_DISPLAY`、
-`DBUS_SESSION_BUS_ADDRESS`，并经 **systemd 用户会话**（`systemd-run --user`）启动。
+## 5. 应用启动
+
+> [!IMPORTANT]
+> 经 `anland-shell` 启动，不在容器内手动拉起进程。宿主 daemon 需要客户端
+> 携带完整会话环境：`anland-shell` 注入 `XDG_RUNTIME_DIR`、`WAYLAND_DISPLAY`、
+> `DBUS_SESSION_BUS_ADDRESS`，并经 **systemd 用户会话**（`systemd-run --user`）启动。
 
 ```text
 anland-shell → 容器 → START → APPS → 应用
@@ -227,7 +250,7 @@ anland-shell → 容器 → START → APPS → 应用
 
 两项生效即时并持久化（`config set scale_mode=N (applied + persisted)`）。
 
-### 无画面定位
+### 5.1 无画面定位
 
 daemon 日志分界：
 
@@ -244,7 +267,9 @@ logcat -d | grep 'anland-wl:' | tail -20
 仅有 `created` 无 `mapped`：客户端未提交缓冲区，问题在应用侧。
 有 `mapped` 无 `window attached`：`com.anlandnext` 侧。
 
-## GPU 版本
+---
+
+## 6. GPU 版本
 
 同样是双版本，因为两家 GPU 的驱动配置相反：
 
@@ -257,7 +282,9 @@ logcat -d | grep 'anland-wl:' | tail -20
 GPU 差异体现在用户态图形栈：高通走 Mesa + kgsl，MTK 走 libhybris + 厂商驱动，
 由 `configure-gpu` 与 `setup-mali-hybris` 按厂商处理。
 
-## 构建
+---
+
+## 7. 构建
 
 Actions → “发布全桌面 Wayland RootFS（高通 + MTK 双版本）” → `gpu_vendor` 保持 `both`。
 
@@ -270,20 +297,25 @@ Actions → “发布全桌面 Wayland RootFS（高通 + MTK 双版本）” →
 | `anland_major` | `6` | 6 = anlandx 会话；5 = 旧版 patched KWin 路线（保留以便对照） |
 | `anland6_version` | `6.2` | anland release tag |
 
-## 支持范围
+---
+
+## 8. 支持范围
 
 - Anland 6.x：Debian 13、Ubuntu 26、Fedora 43/44、Arch Linux ARM
 - Ubuntu 24 / 25 不支持 Anland（上游如此）
-- **Android 14（API 34）或更高。** anland6 用户态守护进程调用
-  `ANativeWindow_readFromParcel` —— API 34 才引入的符号，代码里没有回退。
-  Android 13 上 daemon 加载失败：
-  `CANNOT LINK EXECUTABLE ... cannot locate symbol "ANativeWindow_readFromParcel"`。
-  上游没有支持 Android 13 的计划
-  （[SuperTurtleDev/anland#112](https://github.com/SuperTurtleDev/anland/issues/112)）。
-  注意这与 `droidspaces-lkm` 的 KMI 覆盖矩阵无关：那边的 Android 12/13
-  说的是**内核模块**一侧。
+> [!CAUTION]
+> **Android 14（API 34）或更高。** anland6 用户态守护进程调用
+> `ANativeWindow_readFromParcel` —— API 34 才引入的符号，代码里没有回退。
+> Android 13 上 daemon 加载失败：
+> `CANNOT LINK EXECUTABLE ... cannot locate symbol "ANativeWindow_readFromParcel"`。
+> 上游没有支持 Android 13 的计划
+> （[SuperTurtleDev/anland#112](https://github.com/SuperTurtleDev/anland/issues/112)）。
+> 注意这与 `droidspaces-lkm` 的 KMI 覆盖矩阵无关：那边的 Android 12/13
+> 说的是**内核模块**一侧。
 
-## 目录
+---
+
+## 9. 目录
 
 ```
 scripts/tui/install-anland6.sh       安装 anlandx 会话（本仓库核心改动）
@@ -293,7 +325,8 @@ scripts/desktops/*.sh                各桌面的包清单与环境（6.x 下只
 scripts/tui/configure-gpu.sh         高通/MTK 的 Mesa 与渲染配置
 ```
 
-## 许可
+---
+
+## 10. 许可
 
 继承上游（见 LICENSE）。
-

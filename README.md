@@ -1,17 +1,28 @@
-# Droidspaces Anland 6.x RootFS Builder
+> **Builds ARM64 Linux RootFS images for [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS)
+> targeting Anland 6.x — separate Qualcomm and MediaTek variants**: Adreno devices
+> render through Mesa freedreno/turnip, Mali devices through libhybris on the
+> vendor driver, and each image ships the container-side `anlandx` session.
 
-[中文](README.zh-CN.md) · [Documentation](docs/en/README.md)
+> [中文](README.zh-CN.md) · [Documentation](docs/en/README.md)
 
-Builds ARM64 Linux RootFS images for [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS)
-targeting **Anland 6.x**, as separate Qualcomm and MediaTek variants.
+---
 
-## Quick start
+## Documentation index
+
+| Document | What it covers |
+|---|---|
+| [Desktop and Anland guide](docs/en/desktop-and-anland.md) | Mali requirements, daemon log triage, tmpfs limits |
+| [droidspaces-lkm](https://github.com/misaka5202/droidspaces-lkm) | the kernel modules (mali_nsfix etc.) this image depends on |
+| [anland](https://github.com/SuperTurtleDev/anland) | the display protocol upstream (use the fork releases) |
+
+---
+## 1. Quick start
 
 Requirements: root (KernelSU / APatch / Magisk), Droidspaces, arm64.
 
-MediaTek / Mali devices additionally need
-[droidspaces-lkm](https://github.com/misaka5202/droidspaces-lkm), which ships
-`mali_nsfix.ko` and loads it automatically on Mali platforms.
+> [!IMPORTANT]
+> MediaTek / Mali devices additionally need [droidspaces-lkm](https://github.com/misaka5202/droidspaces-lkm),
+> which ships `mali_nsfix.ko` and loads it automatically on Mali platforms.
 
 The stock MediaTek image renders through libhybris on the vendor Mali driver,
 which is what gives hardware acceleration. `mali_nsfix` is required because
@@ -39,9 +50,11 @@ application. Each application gets its own Android window (`AwlWindowActivity`),
 appears in Recents, supports split screen, and keeps its own IME state.
 
 Host-side components, their roles and how they fail are covered in
-[Host-side setup](#host-side-setup).
+[Host-side setup](#4-host-side-setup).
 
-## Download list
+---
+
+## 2. Download list
 
 | File | Source | Purpose |
 | --- | --- | --- |
@@ -89,7 +102,7 @@ stock 6.2 behaviour, use
 [SuperTurtleDev/anland 6.2](https://github.com/SuperTurtleDev/anland/releases/tag/6.2)
 instead — but expect the input problems above.
 
-### anland-shell needs the patched build
+### 2.1 anland-shell needs the patched build
 
 Upstream 1.1 (2026-09-17) calls `droidspaces show --format`:
 
@@ -119,7 +132,9 @@ su -c 'droidspaces show --format'  # Unknown or incomplete option
 `setup-anland6-host.sh` reads the Droidspaces version and picks the patched
 build at ≥7.2.0 automatically.
 
-## Differences from 5.x
+---
+
+## 3. Differences from 5.x
 
 | | Anland 5.x (old line) | Anland 6.x (this repository) |
 |---|---|---|
@@ -134,7 +149,9 @@ installing those debs, the `kwin_wayland` binary contains no anland string at
 all — the session starts but has no output path. This repository takes the 6.x
 line and avoids that dead end.
 
-## Host-side setup
+---
+
+## 4. Host-side setup
 
 Four components on the host. Missing any one of them means no picture.
 
@@ -151,7 +168,7 @@ For external images, component 4 must be installed by hand:
 tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh
 ```
 
-### Automated setup
+### 4.1 Automated setup
 
 ```bash
 adb push scripts/setup-anland6-host.sh /data/local/tmp/
@@ -162,13 +179,14 @@ Idempotent. It installs the module (`ksud module install`, or extract into
 `/data/adb/modules/`), installs the APKs, writes daemon configuration
 (`auto_attach=1`, `scale_mode=1`), and adds the container bind mount.
 
-### Manual setup
+### 4.2 Manual setup
 
 **1. The `anland-awl` module**
 
-A reboot is required after flashing. While the module sits in `modules_update/`,
-`waylandbridge` does not run and `/data/local/tmp/awl/wayland-0` does not exist.
-After rebooting:
+> [!CAUTION]
+> A reboot is required after flashing. While the module sits in `modules_update/`,
+> `waylandbridge` does not run and `/data/local/tmp/awl/wayland-0` does not exist.
+> After rebooting:
 
 ```bash
 su -c 'pidof waylandbridge'
@@ -222,13 +240,16 @@ speak Android binder directly, which Linux applications in a container do not.
 Enable hardware access (`--hw-access` / `--gpu`) and privileged mode, and tick
 `nocaps` and `noseccomp`.
 
-## Launching applications
+---
 
-Launch through `anland-shell`, not by starting processes inside the container
-directly. The host daemon needs the client to carry the full session
-environment: `anland-shell` injects `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY` and
-`DBUS_SESSION_BUS_ADDRESS`, and starts through the **systemd user session**
-(`systemd-run --user`).
+## 5. Launching applications
+
+> [!IMPORTANT]
+> Launch through `anland-shell`, not by starting processes inside the container
+> directly. The host daemon needs the client to carry the full session
+> environment: `anland-shell` injects `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY` and
+> `DBUS_SESSION_BUS_ADDRESS`, and starts through the **systemd user session**
+> (`systemd-run --user`).
 
 ```text
 anland-shell → container → START → APPS → application
@@ -252,7 +273,7 @@ Suggested Window Settings for `com.anlandnext`:
 
 Both apply immediately and persist (`config set scale_mode=N (applied + persisted)`).
 
-### When there is no picture
+### 5.1 When there is no picture
 
 Daemon log landmarks:
 
@@ -274,7 +295,9 @@ MediaTek / Mali devices have three additional requirements (the `mali_nsfix`
 module, `AWL_NO_SCANOUT`, and `sc_enabled`); see the
 [desktop and Anland guide](docs/en/desktop-and-anland.md#mediatek--mali-devices).
 
-## GPU variants
+---
+
+## 6. GPU variants
 
 Two variants, because the two GPU vendors need opposite driver setups:
 
@@ -288,7 +311,9 @@ distribution's own Xwayland); the GPU difference lives only in the Mesa layer,
 handled by `configure-gpu`. The host-side compositor is a separate matter — it
 uses the vendor GPU driver on both platforms.
 
-## Building
+---
+
+## 7. Building
 
 Actions → “发布全桌面 Wayland RootFS（高通 + MTK 双版本）” → leave `gpu_vendor` on `both`.
 
@@ -301,20 +326,25 @@ Inputs added for 6.x:
 | `anland_major` | `6` | 6 = anlandx session; 5 = the old patched-KWin line (kept for comparison) |
 | `anland6_version` | `6.2` | anland release tag |
 
-## Support matrix
+---
+
+## 8. Support matrix
 
 - Anland 6.x: Debian 13, Ubuntu 26, Fedora 43/44, Arch Linux ARM
 - Ubuntu 24 / 25 do not support Anland (upstream limitation)
-- **Android 14 (API 34) or newer.** anland6's user-space daemon calls
-  `ANativeWindow_readFromParcel`, an API 34 symbol, with no fallback. On
-  Android 13 it fails to load:
-  `CANNOT LINK EXECUTABLE ... cannot locate symbol "ANativeWindow_readFromParcel"`.
-  Upstream has no plan to support Android 13
-  ([SuperTurtleDev/anland#112](https://github.com/SuperTurtleDev/anland/issues/112)).
-  Note this is unrelated to `droidspaces-lkm`'s KMI matrix: those Android
-  12/13 entries are **kernel-module** side only.
+> [!CAUTION]
+> **Android 14 (API 34) or newer.** anland6's user-space daemon calls
+> `ANativeWindow_readFromParcel`, an API 34 symbol, with no fallback. On
+> Android 13 it fails to load:
+> `CANNOT LINK EXECUTABLE ... cannot locate symbol "ANativeWindow_readFromParcel"`.
+> Upstream has no plan to support Android 13
+> ([SuperTurtleDev/anland#112](https://github.com/SuperTurtleDev/anland/issues/112)).
+> Note this is unrelated to `droidspaces-lkm`'s KMI matrix: those Android
+> 12/13 entries are **kernel-module** side only.
 
-## Layout
+---
+
+## 9. Layout
 
 ```
 scripts/tui/install-anland6.sh       installs the anlanx session — the core change here
@@ -324,6 +354,8 @@ scripts/desktops/*.sh                per-desktop package lists and environment (
 scripts/tui/configure-gpu.sh         Mesa and rendering setup per GPU vendor
 ```
 
-## License
+---
+
+## 10. License
 
 Inherited from upstream; see LICENSE.
