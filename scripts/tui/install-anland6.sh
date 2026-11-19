@@ -41,7 +41,7 @@ set -euo pipefail
 
 USERNAME_IN="${1:-}"
 RELEASE_REPO="${ANLAND_RELEASE_REPO:-misaka5202/anland}"
-# 改版从 6.2-ds2 起发独立文件（不再是 anland-build.2.zip 整包）
+# 改版从 6.2-ds3 起发独立文件（不再是 anland-build.2.zip 整包）
 BUILD_ZIP_NAME="${ANLAND_BUILD_ZIP:-anlandx.tar.gz}"
 WANT_XWAYLAND="${ANLAND_XWAYLAND:-0}"
 MARKER=/etc/droidspaces-anland-major
@@ -106,7 +106,7 @@ if [ -f /etc/os-release ]; then
     # shellcheck disable=SC1091
     . /etc/os-release
 fi
-ANLAND_TAG="${ANLAND_VERSION:-6.2-ds2}"
+ANLAND_TAG="${ANLAND_VERSION:-6.2-ds3}"
 case "${ID:-}" in
     debian|ubuntu) install_deps_apt ;;
     fedora|rhel|centos) install_deps_dnf ;;

@@ -40,10 +40,10 @@ adb shell su -c 'sh /data/local/tmp/verify-anland6-host.sh'
 
 | 文件 | 来源 | 说明 |
 | --- | --- | --- |
-| `module/anland-awl.zip` | **[misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2)** | `waylandbridge` 守护进程（含输入修复） |
+| `module/anland-awl.zip` | **[misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)** | `waylandbridge` 守护进程（含输入修复） |
 | `anland-wayland.apk` | 同上 | `com.anlandnext`，窗口消费者（含额外按键栏） |
 | `anland-shell.apk` | **[misaka5202/anland-shell v1.1-ds72](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)** | 补丁版，见下 |
-| `anlandx.tar.gz` | **[misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2)**（本仓库镜像也已内置） | 容器内 `anlandx` 会话 |
+| `anlandx.tar.gz` | **[misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)**（本仓库镜像也已内置） | 容器内 `anlandx` 会话 |
 
 ### 为什么必须用改版（misaka5202/anland）
 
@@ -58,10 +58,13 @@ adb shell su -c 'sh /data/local/tmp/verify-anland6-host.sh'
 3. **额外按键栏有一部分是死的。** 最左一列（ESC/TAB）落在系统返回手势区里，
    touch 被手势吃掉。改版用 `WindowInsets.Type.systemGestures()` 给底栏让边。
 
+4. **应用窗口起不来**：xdg configure 的 serial 为 0，客户端丢弃后 surface 永不 map，
+   anland-shell 点应用「没反应」。改版改用 `next_serial`。
+
 此外还包含：5.x UI 移植（额外按键栏、可调透明度的沉浸式底栏）、新增文案的
 i18n、以及 IME 合成按键的 evdev 码完整映射（它们恒为 `scanCode == 0`）。
 
-全部由 `main` 构建，当前发布为 `6.2-ds2`。如果你只需要原生 6.2 的行为，请用
+全部由 `main` 构建，当前发布为 `6.2-ds3`。如果你只需要原生 6.2 的行为，请用
 [SuperTurtleDev/anland 6.2](https://github.com/SuperTurtleDev/anland/releases/tag/6.2)
 —— 但上面三个输入问题会复现。
 

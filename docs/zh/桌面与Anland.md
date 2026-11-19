@@ -114,7 +114,7 @@ tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh
 
 | 文件 | 从哪下 | 直链 |
 | --- | --- | --- |
-| `module/anland-awl.zip` | **改版，非上游**（上游 6.2 输入不可用） | [misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2) |
+| `module/anland-awl.zip` | **改版，非上游**（上游 6.2 输入不可用） | [misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3) |
 | `anland-wayland.apk` | 同一个压缩包里 | 同上 |
 | **`anland-shell.apk`** | **补丁版，不要用上游 1.1** | **[misaka5202/anland-shell v1.1-ds72](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)** |
 | `anlandx.tar.gz` | 本仓库镜像已内置 | — |
@@ -132,6 +132,9 @@ tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh
    拿着字无处可送。改版实现了它。
 3. **额外按键栏有一部分是死的。** 最左一列（ESC/TAB）落在系统返回手势区里，
    touch 被手势吃掉。改版用 `WindowInsets.Type.systemGestures()` 给底栏让边。
+
+4. **应用窗口起不来**：xdg configure 的 serial 为 0，客户端丢弃后 surface 永不 map。
+   改版改用 `next_serial`。
 
 此外还包含：5.x UI 移植（额外按键栏、可调透明度的沉浸式底栏）、新增文案的
 i18n、以及 IME 合成按键的 evdev 码完整映射（它们恒为 `scanCode == 0`）。
@@ -169,7 +172,7 @@ su -c 'droidspaces show --format'  # 报 Unknown or incomplete option
 
 **① 刷 `anland-awl` 模块并重启**
 
-从 **[misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2)** 下载 `anland-awl.zip`（上游 6.2 有下面说的输入缺陷），用 KernelSU/APatch 刷入。
+从 **[misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)** 下载 `anland-awl.zip`（上游 6.2 有下面说的输入缺陷），用 KernelSU/APatch 刷入。
 
 **刷完必须重启。** 模块在 `modules_update/` 里躺着的时候，`waylandbridge`
 不会运行，`/data/local/tmp/awl/wayland-0` 也就不存在 —— 这是最常见的失败原因。

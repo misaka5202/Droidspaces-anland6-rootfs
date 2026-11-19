@@ -99,8 +99,8 @@ Anland 6.x needs **four** host-side pieces. Missing any one means no picture:
 | 3 | `anland-shell.apk` | `pm install` + **grant root** | `com.anland.shell`: launcher, lists containers/apps and starts them | no entry point to launch apps |
 | 4 | `anlandx.tar.gz` | **already baked into this image** | the container-side `anlandx` session | no `anland-session` in the container |
 
-Items 1–3 come from the **[misaka5202/anland 6.2-ds2
-release](https://github.com/misaka5202/anland/releases/tag/6.2-ds2)** — the fork,
+Items 1–3 come from the **[misaka5202/anland 6.2-ds3
+release](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)** — the fork,
 not upstream, because upstream 6.2 cannot type (see below). Item 4 is installed
 during the image build; only foreign images need
 `tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh`.
@@ -113,10 +113,10 @@ patched build for a different reason.
 
 | File | Where | Direct link |
 | --- | --- | --- |
-| `module/anland-awl.zip` | **fork, not upstream** | [misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2) |
+| `module/anland-awl.zip` | **fork, not upstream** | [misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3) |
 | `anland-wayland.apk` | **fork, not upstream** | same |
 | **`anland-shell.apk`** | **patched build, not upstream 1.1** | **[misaka5202/anland-shell v1.1-ds72](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)** |
-| `anlandx.tar.gz` | **fork** (also baked into this image) | [misaka5202/anland 6.2-ds2](https://github.com/misaka5202/anland/releases/tag/6.2-ds2) |
+| `anlandx.tar.gz` | **fork** (also baked into this image) | [misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3) |
 
 **Why items 1, 2 and 4 must come from the fork**
 
@@ -132,6 +132,9 @@ Upstream 6.2 has three defects that make desktop input unusable:
 3. **The extra-keys bar is partly dead.** Its leftmost column (ESC/TAB) sits in
    the system back-gesture region and the touch is swallowed. The fork insets
    the bar by `WindowInsets.Type.systemGestures()`.
+
+4. **Windows never appear.** The xdg configure carried serial 0, which clients
+   discard, so the surface never maps. The fork uses `next_serial`.
 
 Also included: the 5.x UI port (extra-keys bar, immersive mode with adjustable
 opacity), i18n for the added strings, and a complete evdev scan-code mapping
@@ -169,7 +172,7 @@ su -c 'droidspaces show --format'  # "Unknown or incomplete option"
 > automatically when it is ≥ 7.2.0, so you do not have to pick.
 
 **① Flash `anland-awl` and reboot.** Download
-[`anland-awl.zip`](https://github.com/misaka5202/anland/releases/tag/6.2-ds2)
+[`anland-awl.zip`](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)
 from the fork release (upstream 6.2 has the input defects described above),
 flash it with KernelSU/APatch.
 
