@@ -84,7 +84,7 @@ su -c 'droidspaces --name=<容器> run -- ls -l /run/anland/wayland-0'
 
 ### 2.3 anland-shell 与 Droidspaces ≥7.2.0
 上游 shell 1.1 调 `droidspaces show --format`，7.2.0 已删除该 flag → 容器永远显示 `stopped` → APPS 点不开。
-用打过补丁的 [v1.1-ds72](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)。
+用打过补丁的 [v1.1-ds73](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)。
 
 ### 2.4 `com.anlandnext` 必须装
 它是**唯一**的窗口创建者。只装 `anland-shell` → 应用网格能开但**不出窗口**。
@@ -319,8 +319,8 @@ adb shell "dumpsys window | grep mCurrentFocus"               # 点应用后应�
 ```
 
 相关仓库：
-- anland 模块/APK 源码 fork：`misaka5202/anland`（含 service_contexts 顺序修复）
-- anland-shell 兼容补丁：`misaka5202/anland-shell` `v1.1-ds72`
+- anland 模块/APK 源码 fork：`misaka5202/anland`，Release **`6.2-ds6`**（上游 6.2 输入不可用：窗口起不来、剪贴板 MIME 缺失等）
+- anland-shell 兼容补丁：`misaka5202/anland-shell` `v1.1-ds73`
 - 内核模块（vkms / mali_nsfix）：`misaka5202/droidspaces-lkm`
 - 上游 issue：[#84](https://github.com/SuperTurtleDev/anland/issues/84) ·
   [#130](https://github.com/SuperTurtleDev/anland/issues/130) ·
