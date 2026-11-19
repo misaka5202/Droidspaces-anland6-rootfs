@@ -45,10 +45,10 @@ Host-side components, their roles and how they fail are covered in
 
 | File | Source | Purpose |
 | --- | --- | --- |
-| `module/anland-awl.zip` | **[misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)** | the `waylandbridge` daemon, with the IME fixes |
+| `module/anland-awl.zip` | **[misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6)** | the `waylandbridge` daemon, with the IME fixes |
 | `anland-wayland.apk` | same | `com.anlandnext`, the window consumer, with the extra-keys bar |
-| `anland-shell.apk` | **[misaka5202/anland-shell v1.1-ds72](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)** | patched build, see below |
-| `anlandx.tar.gz` | **[misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)** (also already inside the images built here) | the `anlandx` session inside the container |
+| `anland-shell.apk` | **[misaka5202/anland-shell v1.1-ds73](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)** | patched build, see below |
+| `anlandx.tar.gz` | **[misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6)** (also already inside the images built here) | the `anlandx` session inside the container |
 
 ### Why the modified build (misaka5202/anland)
 
@@ -70,12 +70,21 @@ desktop input unusable:
 4. **Windows never appear.** The xdg configure carried serial 0, which clients
    discard, so the surface never maps and anland-shell does nothing on tap.
    The fork uses `next_serial`.
+5. **Chinese never lands in a terminal.** Terminals have no `text_input`, so the
+   fork puts the text on the Wayland selection and sends the terminal's paste
+   shortcut (`paste_shortcut` in `config.json`, default `ctrl+shift+v`).
+6. **X11 apps could not read the clipboard.** The selection only advertised
+   `text/plain*`, while Konsole and other Xwayland clients ask for
+   `UTF8_STRING`. The fork advertises `UTF8_STRING` / `TEXT` / `STRING` too.
+7. **Reinstalling the module wiped `config.json`.** `runtime_dir` fell back to
+   the compiled default and no longer matched the container's `bind_mounts`.
+   `customize.sh` now regenerates it from the container's bind source.
 
 Also included: the 5.x UI port (extra-keys bar, immersive mode with adjustable
 opacity), i18n for the added strings, and a complete evdev scan-code mapping
 for IME-synthesised key events (they always carry `scanCode == 0`).
 
-Built from `main`; `6.2-ds3` is the current release. If you only need the
+Built from `main`; `6.2-ds6` is the current release. If you only need the
 stock 6.2 behaviour, use
 [SuperTurtleDev/anland 6.2](https://github.com/SuperTurtleDev/anland/releases/tag/6.2)
 instead — but expect the input problems above.
@@ -96,7 +105,7 @@ still exiting 0, so the running set parses as empty, every container shows
 Upstream PR [SuperTurtleDev/anland-shell#2](https://github.com/SuperTurtleDev/anland-shell/pull/2)
 (2026-11-13) fixes it; it is not merged.
 
-`v1.1-ds72` changes: prefer `show --json`, fall back to `show --format`, strip
+`v1.1-ds73` changes: prefer `show --json`, fall back to `show --format`, strip
 ANSI escapes before parsing. Verified on OPPO PHZ110 / MT6989 / Android 17 /
 Droidspaces 7.2.0.
 
@@ -229,7 +238,7 @@ Launch problems:
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| container shows `stopped` while it runs | anland-shell incompatible with Droidspaces ≥7.2.0 | use `v1.1-ds72` |
+| container shows `stopped` while it runs | anland-shell incompatible with Droidspaces ≥7.2.0 | use `v1.1-ds73` |
 | `no containers defined` | `com.anland.shell` has no root | grant root |
 | `APPS` reports `Anlandx not installed` | container not running | `START` first |
 | clicks do nothing | see the next section | read the daemon log |

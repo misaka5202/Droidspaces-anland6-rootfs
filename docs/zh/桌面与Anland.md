@@ -114,9 +114,9 @@ tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh
 
 | 文件 | 从哪下 | 直链 |
 | --- | --- | --- |
-| `module/anland-awl.zip` | **改版，非上游**（上游 6.2 输入不可用） | [misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3) |
+| `module/anland-awl.zip` | **改版，非上游**（上游 6.2 输入不可用） | [misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6) |
 | `anland-wayland.apk` | 同一个压缩包里 | 同上 |
-| **`anland-shell.apk`** | **补丁版，不要用上游 1.1** | **[misaka5202/anland-shell v1.1-ds72](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)** |
+| **`anland-shell.apk`** | **补丁版，不要用上游 1.1** | **[misaka5202/anland-shell v1.1-ds73](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)** |
 | `anlandx.tar.gz` | 本仓库镜像已内置 | — |
 
 
@@ -135,6 +135,15 @@ tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh
 
 4. **应用窗口起不来**：xdg configure 的 serial 为 0，客户端丢弃后 surface 永不 map。
    改版改用 `next_serial`。
+5. **中文在终端里落不了地**：终端没有 `text_input`，改版把文本放进 Wayland
+   选区，再发该终端的粘贴键（`config.json` 的 `paste_shortcut`，默认
+   `ctrl+shift+v`）。
+6. **X11 应用读不到剪贴板**：选区只声明了 `text/plain*`，而 Konsole 这类
+   Xwayland 客户端要的是 `UTF8_STRING`。改版补上 `UTF8_STRING` / `TEXT` /
+   `STRING`。
+7. **重装模块会丢 `config.json`**：`runtime_dir` 退回编译默认值，和容器的
+   `bind_mounts` 对不上，socket 在容器里看不见。`customize.sh` 现在会按容器
+   bind 源目录重新生成。
 
 此外还包含：5.x UI 移植（额外按键栏、可调透明度的沉浸式底栏）、新增文案的
 i18n、以及 IME 合成按键的 evdev 码完整映射（它们恒为 `scanCode == 0`）。
@@ -152,9 +161,16 @@ i18n、以及 IME 合成按键的 evdev 码完整映射（它们恒为 `scanCode
 修复 PR [SuperTurtleDev/anland-shell#2](https://github.com/SuperTurtleDev/anland-shell/pull/2)
 **2026-11-13 就提了，至今未合并**，所以官方 release 里没有修好的包。
 
-补丁版 `v1.1-ds72` 做的事就是：先请求 `show --json`，失败再回退 `show --format`，
-解析前剥离 ANSI 转义。已在 OPPO PHZ110（MT6989 / Android 17 /
-Droidspaces 7.2.0）上验证端到端可用。**上游合并后可换回官方包。**
+补丁版 `v1.1-ds73` 有两处修复：
+
+- 先请求 `show --json`，失败再回退 `show --format`，解析前剥离 ANSI 转义
+  （即上面那个上游 PR，至今未合并）；
+- **给每条 `droidspaces run` 片段前置容器 `PATH`**。`run` 继承的是**宿主**
+  PATH（里面没有 `/usr/bin`），容器里的 `getent` 等命令全部不可见，用户探测
+  静默失败，于是点任何应用都报 `user Gold not found in container`。
+
+已在 OPPO PHZ110（MT6989 / Android 17）和小米 2410CRP4CG（Android 16）上
+验证端到端可用，两者都是 Droidspaces 7.2.0。**上游合并后可换回官方包。**
 
 自己判断需不需要补丁版：
 
@@ -164,7 +180,7 @@ su -c 'droidspaces show --format'  # 报 Unknown or incomplete option
 # 两条同时成立 → 你需要补丁版
 ```
 
-> `setup-anland6-host.sh` 会读 Droidspaces 版本，≥7.2.0 时自动从 `v1.1-ds72`
+> `setup-anland6-host.sh` 会读 Droidspaces 版本，≥7.2.0 时自动从 `v1.1-ds73`
 > 下载，不用手动挑。
 
 下面按顺序做。**任何一步没做对都没有画面**，而且失败现象往往很相似
@@ -172,7 +188,7 @@ su -c 'droidspaces show --format'  # 报 Unknown or incomplete option
 
 **① 刷 `anland-awl` 模块并重启**
 
-从 **[misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)** 下载 `anland-awl.zip`（上游 6.2 有下面说的输入缺陷），用 KernelSU/APatch 刷入。
+从 **[misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6)** 下载 `anland-awl.zip`（上游 6.2 有下面说的输入缺陷），用 KernelSU/APatch 刷入。
 
 **刷完必须重启。** 模块在 `modules_update/` 里躺着的时候，`waylandbridge`
 不会运行，`/data/local/tmp/awl/wayland-0` 也就不存在 —— 这是最常见的失败原因。
@@ -198,7 +214,7 @@ pm install -r anland-shell.apk        # com.anland.shell：容器/应用启动�
 > 而 Droidspaces **7.2.0 起改用 `show --json`**，旧参数会报错但仍返回 0，
 > 导致所有容器显示成 `stopped`、应用网格点不开。
 >
-> 用 [`misaka5202/anland-shell v1.1-ds72`](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)
+> 用 [`misaka5202/anland-shell v1.1-ds73`](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)
 > 的补丁版（先试 `--json` 再回退）。上游修复见
 > [PR #2](https://github.com/SuperTurtleDev/anland-shell/pull/2)，合并后可换回官方包。
 >
@@ -290,7 +306,7 @@ anland-shell → 容器 → START → APPS → 应用
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1-ds72` |
+| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1-ds73` |
 | `no containers defined` | `com.anland.shell` 无 root | 授权 |
 | `APPS` 报 `Anlandx not installed` | 容器未运行 | 先 `START` |
 | 点击无响应 | 见「无画面定位」 | 查 daemon 日志 |
@@ -310,7 +326,7 @@ anland-shell → 容器 → START → APPS → 应用
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
 | `no wayland socket at /run/anland/wayland-0` | 容器无法访问 socket | 补 ③ 绑定挂载 |
-| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1-ds72` |
+| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1-ds73` |
 | `no containers defined` | `com.anland.shell` 无 root | 授权 |
 | 窗口列表为 0，daemon 正常 | 客户端未提交首帧 | 查日志分界 |
 | 画面变形 | `scale_mode=0`（Stretch） | 改 `Fit` |

@@ -99,8 +99,8 @@ Anland 6.x needs **four** host-side pieces. Missing any one means no picture:
 | 3 | `anland-shell.apk` | `pm install` + **grant root** | `com.anland.shell`: launcher, lists containers/apps and starts them | no entry point to launch apps |
 | 4 | `anlandx.tar.gz` | **already baked into this image** | the container-side `anlandx` session | no `anland-session` in the container |
 
-Items 1–3 come from the **[misaka5202/anland 6.2-ds3
-release](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)** — the fork,
+Items 1–3 come from the **[misaka5202/anland 6.2-ds6
+release](https://github.com/misaka5202/anland/releases/tag/6.2-ds6)** — the fork,
 not upstream, because upstream 6.2 cannot type (see below). Item 4 is installed
 during the image build; only foreign images need
 `tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh`.
@@ -113,10 +113,10 @@ patched build for a different reason.
 
 | File | Where | Direct link |
 | --- | --- | --- |
-| `module/anland-awl.zip` | **fork, not upstream** | [misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3) |
+| `module/anland-awl.zip` | **fork, not upstream** | [misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6) |
 | `anland-wayland.apk` | **fork, not upstream** | same |
-| **`anland-shell.apk`** | **patched build, not upstream 1.1** | **[misaka5202/anland-shell v1.1-ds72](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)** |
-| `anlandx.tar.gz` | **fork** (also baked into this image) | [misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3) |
+| **`anland-shell.apk`** | **patched build, not upstream 1.1** | **[misaka5202/anland-shell v1.1-ds73](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)** |
+| `anlandx.tar.gz` | **fork** (also baked into this image) | [misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6) |
 
 **Why items 1, 2 and 4 must come from the fork**
 
@@ -135,6 +135,16 @@ Upstream 6.2 has three defects that make desktop input unusable:
 
 4. **Windows never appear.** The xdg configure carried serial 0, which clients
    discard, so the surface never maps. The fork uses `next_serial`.
+5. **Chinese never lands in a terminal.** Terminals have no `text_input`, so the
+   fork puts the text on the Wayland selection and sends the terminal's paste
+   shortcut (`paste_shortcut` in `config.json`, default `ctrl+shift+v`).
+6. **X11 apps could not read the clipboard.** The selection only advertised
+   `text/plain*`, while Konsole and other Xwayland clients ask for
+   `UTF8_STRING`. The fork advertises `UTF8_STRING` / `TEXT` / `STRING` too.
+7. **Reinstalling the module wiped `config.json`.** `runtime_dir` fell back to
+   the compiled default and no longer matched the container's `bind_mounts`, so
+   the socket was invisible inside the container. `customize.sh` now regenerates
+   it from the container's bind source.
 
 Also included: the 5.x UI port (extra-keys bar, immersive mode with adjustable
 opacity), i18n for the added strings, and a complete evdev scan-code mapping
@@ -155,10 +165,18 @@ every container shows stopped -> APPS is blocked -> apps never start -> no pictu
 The fix, [SuperTurtleDev/anland-shell#2](https://github.com/SuperTurtleDev/anland-shell/pull/2),
 was opened on **2026-11-13 and is still unmerged**, so no official release carries it.
 
-The `v1.1-ds72` build does exactly that one thing: ask for `show --json` first,
-fall back to `show --format`, and strip ANSI escapes before parsing. Verified
-end-to-end on an OPPO PHZ110 (MT6989 / Android 17 / Droidspaces 7.2.0).
-**Switch back to the official build once upstream merges.**
+`v1.1-ds73` carries two fixes:
+
+- ask for `show --json` first, fall back to `show --format`, strip ANSI escapes
+  before parsing (the upstream PR above, still unmerged);
+- **prepend the container `PATH` to every `droidspaces run` snippet.** `run`
+  inherits the *host* PATH, where `/usr/bin` is absent, so `getent` and other
+  container binaries are invisible; the user probe then fails silently and every
+  app launch reports `user Gold not found in container`.
+
+Verified end-to-end on OPPO PHZ110 (MT6989 / Android 17) and Xiaomi 2410CRP4CG
+(Android 16), both on Droidspaces 7.2.0. **Switch back to the official build
+once upstream merges.**
 
 Check whether you need it:
 
@@ -168,11 +186,11 @@ su -c 'droidspaces show --format'  # "Unknown or incomplete option"
 # both true -> you need the patched build
 ```
 
-> `setup-anland6-host.sh` reads the Droidspaces version and downloads `v1.1-ds72`
+> `setup-anland6-host.sh` reads the Droidspaces version and downloads `v1.1-ds73`
 > automatically when it is ≥ 7.2.0, so you do not have to pick.
 
 **① Flash `anland-awl` and reboot.** Download
-[`anland-awl.zip`](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)
+[`anland-awl.zip`](https://github.com/misaka5202/anland/releases/tag/6.2-ds6)
 from the fork release (upstream 6.2 has the input defects described above),
 flash it with KernelSU/APatch.
 
@@ -190,7 +208,7 @@ shows `no containers defined`.
 > removed** in favour of `show --json`. The old flag prints
 > `Unknown or incomplete option` on stdout while still exiting 0, so every
 > container renders as `stopped` and the app grid refuses to open. Use the
-> patched [v1.1-ds72 build](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72);
+> patched [v1.1-ds73 build](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73);
 > the upstream fix is [PR #2](https://github.com/SuperTurtleDev/anland-shell/pull/2).
 
 **③ Add the bind mount (required, do not skip).** The daemon publishes its socket
@@ -294,7 +312,7 @@ Four things can go wrong at this step:
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| container shows `stopped` while it actually runs | anland-shell incompatible with Droidspaces ≥7.2.0 | use the [patched build](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72) |
+| container shows `stopped` while it actually runs | anland-shell incompatible with Droidspaces ≥7.2.0 | use the [patched build](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73) |
 | shows `no containers defined` | app has no root | grant root in your root manager |
 | `APPS` reports `Anlandx not installed` | the container is not running | start it first |
 | tapping an app does nothing | see "When there is no picture" | read the daemon log |

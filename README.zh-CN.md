@@ -40,10 +40,10 @@ adb shell su -c 'sh /data/local/tmp/verify-anland6-host.sh'
 
 | 文件 | 来源 | 说明 |
 | --- | --- | --- |
-| `module/anland-awl.zip` | **[misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)** | `waylandbridge` 守护进程（含输入修复） |
+| `module/anland-awl.zip` | **[misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6)** | `waylandbridge` 守护进程（含输入修复） |
 | `anland-wayland.apk` | 同上 | `com.anlandnext`，窗口消费者（含额外按键栏） |
-| `anland-shell.apk` | **[misaka5202/anland-shell v1.1-ds72](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds72)** | 补丁版，见下 |
-| `anlandx.tar.gz` | **[misaka5202/anland 6.2-ds3](https://github.com/misaka5202/anland/releases/tag/6.2-ds3)**（本仓库镜像也已内置） | 容器内 `anlandx` 会话 |
+| `anland-shell.apk` | **[misaka5202/anland-shell v1.1-ds73](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)** | 补丁版，见下 |
+| `anlandx.tar.gz` | **[misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6)**（本仓库镜像也已内置） | 容器内 `anlandx` 会话 |
 
 ### 为什么必须用改版（misaka5202/anland）
 
@@ -60,11 +60,19 @@ adb shell su -c 'sh /data/local/tmp/verify-anland6-host.sh'
 
 4. **应用窗口起不来**：xdg configure 的 serial 为 0，客户端丢弃后 surface 永不 map，
    anland-shell 点应用「没反应」。改版改用 `next_serial`。
+5. **中文在终端里落不了地**：终端没有 `text_input`，改版把文本放进 Wayland
+   选区，再发该终端的粘贴键（`config.json` 的 `paste_shortcut`，默认
+   `ctrl+shift+v`）。
+6. **X11 应用读不到剪贴板**：选区只声明了 `text/plain*`，而 Konsole 这类
+   Xwayland 客户端要的是 `UTF8_STRING`。改版补上 `UTF8_STRING` / `TEXT` /
+   `STRING`。
+7. **重装模块会丢 `config.json`**：`runtime_dir` 退回编译默认值，和容器的
+   `bind_mounts` 对不上。`customize.sh` 现在会按容器 bind 源目录重新生成。
 
 此外还包含：5.x UI 移植（额外按键栏、可调透明度的沉浸式底栏）、新增文案的
 i18n、以及 IME 合成按键的 evdev 码完整映射（它们恒为 `scanCode == 0`）。
 
-全部由 `main` 构建，当前发布为 `6.2-ds3`。如果你只需要原生 6.2 的行为，请用
+全部由 `main` 构建，当前发布为 `6.2-ds6`。如果你只需要原生 6.2 的行为，请用
 [SuperTurtleDev/anland 6.2](https://github.com/SuperTurtleDev/anland/releases/tag/6.2)
 —— 但上面三个输入问题会复现。
 
@@ -83,7 +91,7 @@ Droidspaces 7.2.0（2026-11-07）移除该参数，改为 `show --json`。旧参
 上游 PR [SuperTurtleDev/anland-shell#2](https://github.com/SuperTurtleDev/anland-shell/pull/2)
 （2026-11-13）修复，未合并。
 
-`v1.1-ds72` 改动：`show --json` 优先、`show --format` 回退、解析前剥离 ANSI
+`v1.1-ds73` 改动：`show --json` 优先、`show --format` 回退、解析前剥离 ANSI
 转义。验证环境 OPPO PHZ110 / MT6989 / Android 17 / Droidspaces 7.2.0。
 
 判定是否需要补丁版：
@@ -205,7 +213,7 @@ anland-shell → 容器 → START → APPS → 应用
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1-ds72` |
+| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1-ds73` |
 | `no containers defined` | `com.anland.shell` 无 root | 授权 |
 | `APPS` 报 `Anlandx not installed` | 容器未运行 | 先 `START` |
 | 点击无响应 | 见下节 | 查 daemon 日志 |
