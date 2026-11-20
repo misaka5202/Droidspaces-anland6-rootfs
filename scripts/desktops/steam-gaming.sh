@@ -78,7 +78,6 @@ install_arch() {
 }
 
 install_profile() {
-    # 1. Game-grade system deps per distro
     case "$ID" in
         debian|ubuntu) install_apt ;;
         fedora) install_fedora ;;
@@ -86,9 +85,11 @@ install_profile() {
         *) echo "Steam Gaming 不支持当前发行版：$ID" >&2; return 1 ;;
     esac
 
-    # 2. Steam ARM64 client + FEX + desktop launcher
-    #    ROOTFS_DIR is inherited from the Docker build context (empty = current rootfs)
-    echo "[SKIP] install-steam temporarily disabled for CI debug"le 已 COPY scripts/tui/install-steam.sh 到 /usr/local/sbin/" >&2
+    if command -v install-steam >/dev/null 2>&1; then
+        echo "--> 正在装配 Steam ARM64 client + FEX"
+        install-steam --channel publicbeta
+    else
+        echo "!! install-steam 脚本未找到" >&2
     fi
 }
 
