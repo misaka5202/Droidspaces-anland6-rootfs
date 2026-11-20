@@ -166,27 +166,48 @@ done
 # ---------- 5. FEX Arch rootfs ----------
 log "==> Step 5: Installing FEX Arch rootfs"
 
+# FEX rootfs is distributed by FEX as SquashFS/EroFS images via
+# https://rootfs.fex-emu.gg/RootFS_links.json (the old GitHub FEXRootFSFetcher.tar.gz
+# asset was removed and now returns HTTP 404).
+# We use the ArchLinux SquashFS image and unpack it with unsquashfs so FEX gets a
+# real directory tree at $FEX_DIR (Steam/FEX expects a rootfs directory).
 if [[ -z "$FEX_ROOTFS_URL" ]]; then
-    FEX_ROOTFS_URL="https://github.com/FEX-Emu/FEX/releases/latest/download/FEXRootFSFetcher.tar.gz"
+    FEX_ROOTFS_URL="https://rootfs.fex-emu.gg/ArchLinux/2026-08-11/ArchLinux.sqsh"
 fi
 
 mkdir -p "$FEX_DIR"
-download "$FEX_ROOTFS_URL" "$TMP_DIR/fex-rootfs.tar.gz"
-# FEXRootFSFetcher is a tar.gz containing the Arch rootfs
-if tar -tzf "$TMP_DIR/fex-rootfs.tar.gz" >/dev/null 2>&1; then
-    tar -xzf "$TMP_DIR/fex-rootfs.tar.gz" -C "$TMP_DIR/fex-extract" 2>/dev/null || true
-    # Find where the actual rootfs contents landed
-    if [[ -d "$TMP_DIR/fex-extract/ArchLinux" ]]; then
-        cp -a "$TMP_DIR/fex-extract/ArchLinux/"* "$FEX_DIR/" 2>/dev/null || cp -a "$TMP_DIR/fex-extract/ArchLinux" "$FEX_DIR/"
-    elif [[ -d "$TMP_DIR/fex-extract/rootfs" ]]; then
-        cp -a "$TMP_DIR/fex-extract/rootfs/"* "$FEX_DIR/" 2>/dev/null || cp -a "$TMP_DIR/fex-extract/rootfs" "$FEX_DIR/"
+
+# .sqsh (SquashFS) — unpack via unsquashfs (squashfs-tools)
+if [[ "$FEX_ROOTFS_URL" == *.sqsh ]]; then
+    if command -v unsquashfs >/dev/null 2>&1; then
+        log "    unsquashfs: extracting $FEX_ROOTFS_URL -> $FEX_DIR"
+        download "$FEX_ROOTFS_URL" "$TMP_DIR/fex-rootfs.sqsh"
+        # unsquashfs creates FEX_DIR itself; use -f to overwrite stale contents
+        if ! unsquashfs -f -d "$FEX_DIR" "$TMP_DIR/fex-rootfs.sqsh"; then
+            log "    unsquashfs failed; Steam will download the rootfs on first game launch"
+        fi
     else
-        # Try extracting directly (some tarballs are self-contained)
-        mkdir -p "$FEX_DIR"
-        tar -xzf "$TMP_DIR/fex-rootfs.tar.gz" -C "$FEX_DIR" 2>/dev/null || true
+        log "    unsquashfs not installed; skipping FEX rootfs (Steam will download on first game launch)"
     fi
+# .ero (EroFS) — unsupported here; fall through to download-on-first-launch
+elif [[ "$FEX_ROOTFS_URL" == *.ero ]]; then
+    log "    EroFS rootfs not supported in-container; Steam will download on first game launch"
+# Legacy tar.gz (FEXRootFSFetcher)
 else
-    log "    FEX rootfs tarball format unrecognized, skipping"
+    download "$FEX_ROOTFS_URL" "$TMP_DIR/fex-rootfs.tar.gz"
+    if tar -tzf "$TMP_DIR/fex-rootfs.tar.gz" >/dev/null 2>&1; then
+        tar -xzf "$TMP_DIR/fex-rootfs.tar.gz" -C "$TMP_DIR/fex-extract" 2>/dev/null || true
+        if [[ -d "$TMP_DIR/fex-extract/ArchLinux" ]]; then
+            cp -a "$TMP_DIR/fex-extract/ArchLinux/"* "$FEX_DIR/" 2>/dev/null || cp -a "$TMP_DIR/fex-extract/ArchLinux" "$FEX_DIR/"
+        elif [[ -d "$TMP_DIR/fex-extract/rootfs" ]]; then
+            cp -a "$TMP_DIR/fex-extract/rootfs/"* "$FEX_DIR/" 2>/dev/null || cp -a "$TMP_DIR/fex-extract/rootfs" "$FEX_DIR/"
+        else
+            mkdir -p "$FEX_DIR"
+            tar -xzf "$TMP_DIR/fex-rootfs.tar.gz" -C "$FEX_DIR" 2>/dev/null || true
+        fi
+    else
+        log "    FEX rootfs tarball format unrecognized, skipping"
+    fi
 fi
 
 # Symlink: Steam's FEX tool hardcodes /usr/share/guestos/fex-mesa
