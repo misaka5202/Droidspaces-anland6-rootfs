@@ -85,12 +85,7 @@ install_profile() {
         *) echo "Steam Gaming 不支持当前发行版：$ID" >&2; return 1 ;;
     esac
 
-    if command -v install-steam >/dev/null 2>&1; then
-        echo "--> 正在装配 Steam ARM64 client + FEX"
-        install-steam --channel publicbeta
-    else
-        echo "!! install-steam 脚本未找到" >&2
-    fi
+    echo "[SKIP] install-steam temporarily disabled for package test"
 }
 
 case "${1:-install}" in
