@@ -108,7 +108,7 @@ desktop_backend_supported() {
 
 desktop_wayland_targets_json() {
     case "${1:-}" in
-        kde|kde-mobile|anland-next)
+        kde|kde-mobile|mobile|anland-next)
             printf '%s\n' '["Debian-13","Ubuntu-26","Fedora-43","Fedora-44","Arch"]'
             ;;
         gnome)
