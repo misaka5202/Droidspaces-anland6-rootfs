@@ -1,0 +1,259 @@
+name: Publish Steam Gaming RootFS (Qualcomm + MediaTek)
+
+on:
+  workflow_dispatch:
+    inputs:
+      gpu_vendor:
+        description: Which GPU variant to build
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - qualcomm
+          - mediatek
+      publish_release:
+        description: >
+          Whether to update the GitHub Release (set false to actually publish;
+          set true for artifact-only tests). INVERTED: build jobs always pass false,
+          the release job uses this input to gate publishing.
+        required: false
+        type: boolean
+        default: true
+      custom_release_tag:
+        description: Dedicated tag (empty = droidspaces-rootfs-steam)
+        required: false
+        default: ''
+        type: string
+      skip_prune:
+        description: Skip pruning old Release assets not built this run
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: droidspaces-rootfs-steam
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  WAYLAND_PACKAGE_REPOSITORY: Goldzxcbug/droidspaces-package
+
+jobs:
+  prepare:
+    name: Prepare unified versions
+    runs-on: ubuntu-latest
+    outputs:
+      build_id: ${{ steps.meta.outputs.build_id }}
+      build_time: ${{ steps.meta.outputs.build_time }}
+    steps:
+      - id: meta
+        run: |
+          build_epoch="$(date -u +'%s')"
+          build_id="v$(date -u -d "@$build_epoch" +'%Y%m%d-%H%M%S')"
+          build_time="$(date -u -d "@$build_epoch" +'%Y-%m-%d %H:%M:%S UTC')"
+          printf 'build_id=%s\n' "$build_id" >> "$GITHUB_OUTPUT"
+          printf 'build_time=%s\n' "$build_time" >> "$GITHUB_OUTPUT"
+
+  build-zh-qualcomm:
+    name: Build zh / Qualcomm Adreno
+    if: inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'qualcomm'
+    needs: prepare
+    uses: ./.github/workflows/build-rootfs-core.yml
+    with:
+      ui_language: zh
+      build_target: custom
+      custom_username: Gold
+      desktop: steam-gaming
+      desktop_autostart: true
+      display_backend: anland-wayland
+      PulseAudio: none
+      enable_zh_tz: true
+      enable_mesa: true
+      enable_8gen2_wayland: false
+      nosnap: true
+      enable_systemd257: false
+      enable_srf: true
+      enable_binfmt: false
+      enable_yj: true
+      enable_kfgj: false
+      enable_zip: true
+      enable_docker: false
+      wayland_package_repository: ${{ env.WAYLAND_PACKAGE_REPOSITORY }}
+      build_id: ${{ needs.prepare.outputs.build_id }}
+      asset_variant: zh
+      publish_release: false
+      gpu_vendor: qualcomm
+
+  build-zh-mediatek:
+    name: Build zh / MediaTek Mali
+    if: inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'mediatek'
+    needs: prepare
+    uses: ./.github/workflows/build-rootfs-core.yml
+    with:
+      ui_language: zh
+      build_target: custom
+      custom_username: Gold
+      desktop: steam-gaming
+      desktop_autostart: true
+      display_backend: anland-wayland
+      PulseAudio: none
+      enable_zh_tz: true
+      enable_mesa: true
+      enable_8gen2_wayland: false
+      nosnap: true
+      enable_systemd257: false
+      enable_srf: true
+      enable_binfmt: false
+      enable_yj: true
+      enable_kfgj: false
+      enable_zip: true
+      enable_docker: false
+      wayland_package_repository: ${{ env.WAYLAND_PACKAGE_REPOSITORY }}
+      build_id: ${{ needs.prepare.outputs.build_id }}
+      asset_variant: zh
+      publish_release: false
+      gpu_vendor: mediatek
+
+  release:
+    name: Update the GitHub Release
+    needs: [prepare, build-zh-qualcomm, build-zh-mediatek]
+    if: ${{ !cancelled() && inputs.publish_release != true }}
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.custom_release_tag || 'droidspaces-rootfs-steam' }}
+      SKIP_PRUNE: ${{ inputs.skip_prune }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: '*-rootfs'
+          merge-multiple: true
+          path: release-assets
+
+      - name: Generate manifests and release notes
+        env:
+          BUILD_ID: ${{ needs.prepare.outputs.build_id }}
+          BUILD_TIME: ${{ needs.prepare.outputs.build_time }}
+        run: |
+          set -euo pipefail
+          archive_count="$(find release-assets -maxdepth 1 -name '*.tar.xz' | wc -l | tr -d ' ')"
+          echo "Archive count: ${archive_count}"
+          [ "${archive_count}" -gt 0 ] || { echo "No RootFS artifacts produced" >&2; exit 1; }
+
+          # Phase 1: zh only
+          bash scripts/generate-rootfs-manifests.sh \
+            --assets release-assets \
+            --language zh \
+            --release-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}" \
+            --output "release-assets/rootfs_zh.json"
+
+          jq -s 'add | sort_by(.language, .distro, .name, .architecture)' \
+            "release-assets/rootfs_zh.json" > release-assets/rootfs.json
+
+          notes_file="$RUNNER_TEMP/rootfs-release-notes.md"
+          cat > "$notes_file" <<'EOF'
+## English
+
+Droidspaces Steam Gaming RootFS — a dedicated ARM64 image with Valve ARM64 Steam client, FEX x86 emulation, and game-grade system deps pre-installed. Windows games run through Proton (auto-downloaded on first use) + Turnip (Adreno) or libhybris (Mali).
+
+This release covers **Chinese** builds in Qualcomm Adreno and MediaTek variants:
+- Distributions: Debian 13, Ubuntu 26.04, Fedora 43, Fedora 44, and Arch Linux.
+- Each image contains: Valve ARM64 Steam client (public beta channel), FEX Arch rootfs, desktop launcher, and game performance tuned environment variables.
+
+Use `rootfs_zh.json` as the subscription manifest in Droidspaces RootFS management. The manifest includes version, file size, SHA-256 checksum, and download URL for each image.
+
+First launch Steam runs `steam -deckard -exitsteam` once to bootstrap the client. On the first Windows game launch, Steam will download Steam Linux Runtime 4.0 for arm64 and Proton — this takes 5–10 minutes.
+EOF
+          {
+            printf '\n## Build information\n\n'
+            printf '%s\n' \
+              "- Build ID: ${BUILD_ID}" \
+              "- Build time (UTC): ${BUILD_TIME}" \
+              "- Release tag: ${RELEASE_TAG}" \
+              '- Architecture: ARM64' \
+              "- Archives: ${archive_count}"
+            printf '\n## Direct download index\n\n'
+            printf '%s\n' \
+              "- [Complete index: rootfs.json](https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/rootfs.json)" \
+              "- [Chinese subscription index: rootfs_zh.json](https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/rootfs_zh.json)"
+          } >> "$notes_file"
+          echo "ROOTFS_RELEASE_NOTES_FILE=${notes_file}" >> "$GITHUB_ENV"
+
+      - name: Create or update Release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag_ref="repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG"
+          if gh api "$tag_ref" >/dev/null 2>&1; then
+            echo "Updating tag: ${RELEASE_TAG}"
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$RELEASE_TAG" \
+              -f sha="$GITHUB_SHA" -F force=true
+          else
+            echo "Creating tag: ${RELEASE_TAG}"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$RELEASE_TAG" -f sha="$GITHUB_SHA"
+          fi
+
+          release_list="$RUNNER_TEMP/rootfs-releases.json"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$release_list"
+          if ! jq -e --arg tag "$RELEASE_TAG" 'any(.[]; .tag_name == $tag)' "$release_list" >/dev/null; then
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Droidspaces Steam Gaming RootFS" \
+              --notes "$(cat "$ROOTFS_RELEASE_NOTES_FILE")" \
+              --draft \
+              --latest=false
+          fi
+
+      - name: Upload RootFS assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(find release-assets -maxdepth 1 -type f -name '*.tar.xz' -print | sort)
+          [ "${#archives[@]}" -gt 0 ] || { echo "No .tar.xz assets" >&2; exit 1; }
+          gh release upload "$RELEASE_TAG" "${archives[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+          mapfile -t manifests < <(find release-assets -maxdepth 1 -type f -name 'rootfs*.json' -print | sort)
+          [ "${#manifests[@]}" -gt 0 ] || { echo "No rootfs*.json manifests" >&2; exit 1; }
+          gh release upload "$RELEASE_TAG" "${manifests[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Prune old assets and publish the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          expected="$RUNNER_TEMP/rootfs-expected-assets.txt"
+          find release-assets -maxdepth 1 -type f -printf '%f\n' | sort > "$expected"
+
+          release_json="$RUNNER_TEMP/rootfs-release.json"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -ce \
+            --arg tag "$RELEASE_TAG" '
+              [.[] | select(.tag_name == $tag)]
+              | if length == 1 then .[0] else error("Release tag not unique") end
+            ' > "$release_json"
+
+          if [ "${SKIP_PRUNE:-false}" = "true" ]; then
+            echo "SKIP_PRUNE=true, skipping old-asset pruning"
+          else
+            while IFS=$'\t' read -r asset_id asset_name; do
+              if ! grep -Fqx -- "$asset_name" "$expected"; then
+                gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"
+                echo "    removed: ${asset_name}"
+              fi
+            done < <(jq -r '.assets[] | "\(.id)\t\(.name)"' "$release_json")
+          fi
+
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Droidspaces Steam Gaming RootFS" \
+            --notes "$(cat "$ROOTFS_RELEASE_NOTES_FILE")" \
+            --draft=false \
+            --latest=false
+          echo "Release published: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"

@@ -8,6 +8,7 @@ desktop_normalize() {
         Mobile|mobile) printf '%s\n' mobile ;;
         GNOME|gnome) printf '%s\n' gnome ;;
         'Anland Next'|anland-next) printf '%s\n' anland-next ;;
+        'Steam Gaming'|steam-gaming) printf '%s\n' steam-gaming ;;
         *) return 1 ;;
     esac
 }
@@ -20,6 +21,7 @@ desktop_label() {
         mobile) printf '%s\n' Mobile ;;
         gnome) printf '%s\n' GNOME ;;
         anland-next) printf '%s\n' 'Anland Next' ;;
+        steam-gaming) printf '%s\n' 'Steam Gaming' ;;
         *) return 1 ;;
     esac
 }
@@ -69,6 +71,12 @@ desktop_target_supported() {
                 *) return 1 ;;
             esac
             ;;
+        steam-gaming)
+            case "$target" in
+                Debian-13|Ubuntu-26|Fedora-43|Fedora-44|Arch) return 0 ;;
+                *) return 1 ;;
+            esac
+            ;;
         *) return 1 ;;
     esac
 }
@@ -102,13 +110,19 @@ desktop_backend_supported() {
                 *) return 1 ;;
             esac
             ;;
+        steam-gaming:anland-wayland)
+            case "$target" in
+                Debian-13|Ubuntu-26|Fedora-43|Fedora-44|Arch) return 0 ;;
+                *) return 1 ;;
+            esac
+            ;;
         *) return 1 ;;
     esac
 }
 
 desktop_wayland_targets_json() {
     case "${1:-}" in
-        kde|kde-mobile|mobile|anland-next)
+        kde|kde-mobile|mobile|anland-next|steam-gaming)
             printf '%s\n' '["Debian-13","Ubuntu-26","Fedora-43","Fedora-44","Arch"]'
             ;;
         gnome)
