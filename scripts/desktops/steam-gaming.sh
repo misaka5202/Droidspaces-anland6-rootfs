@@ -83,8 +83,9 @@ install_apt() {
 install_fedora() {
     case "$VERSION_ID" in 43|44) ;; *) echo "Steam Gaming Fedora $VERSION_ID unsupported" >&2; return 1 ;; esac
 
+    # Fedora has no dbus-user-session package (dbus already provides it)
     dnf install -y --setopt=install_weak_deps=False \
-        dbus-x11 dbus-user-session xdg-user-dirs curl unzip python3 \
+        dbus-x11 xdg-user-dirs curl unzip python3 \
         squashfs-tools \
         pipewire pipewire-alsa pipewire-pulseaudio wireplumber \
         google-noto-cjk-fonts google-noto-emoji-color-fonts \
