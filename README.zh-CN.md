@@ -303,6 +303,7 @@ Actions → “发布全桌面 Wayland RootFS（高通 + MTK 双版本）” →
 
 - Anland 6.x：Debian 13、Ubuntu 26、Fedora 43/44、Arch Linux ARM
 - Ubuntu 24 / 25 不支持 Anland（上游如此）
+- 桌面 profile 含 `mobile`：在 Debian 基础上加装移动端应用集（通讯录、日历、时钟、天气、地图、浏览器、终端），不引入 Phosh / Lomiri 等移动 shell
 > [!CAUTION]
 > **Android 14（API 34）或更高。** anland6 用户态守护进程调用
 > `ANativeWindow_readFromParcel` —— API 34 才引入的符号，代码里没有回退。

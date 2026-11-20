@@ -8,21 +8,22 @@ Choose the target, desktop, display backend, and optional features on the GitHub
 
 | Target | Base image | Desktop profiles | Anland Wayland |
 | --- | --- | --- | --- |
-| `Debian-13` | Debian 13 (trixie) | `none`, `KDE`, `KDE mobile`, `GNOME`, `Anland Next` | Yes |
+| `Debian-13` | Debian 13 (trixie) | `none`, `KDE`, `KDE mobile`, `Mobile`, `GNOME`, `Anland Next` | Yes |
 | `Ubuntu-24` | Ubuntu 24.04 | `none`, `KDE` | No |
 | `Ubuntu-25` | Ubuntu 25.10 | `none`, `KDE` | No |
-| `Ubuntu-26` | Ubuntu 26.04 | `none`, `KDE`, `KDE mobile`, `GNOME`, `Anland Next` | Yes |
-| `Fedora-43` | Fedora 43 | `none`, `KDE`, `KDE mobile`, `GNOME`, `Anland Next` | Yes |
-| `Fedora-44` | Fedora 44 | `none`, `KDE`, `KDE mobile`, `GNOME`, `Anland Next` | Yes |
-| `Arch` | Arch Linux ARM | `none`, `KDE`, `KDE mobile`, `GNOME`, `Anland Next` | Yes (KDE uses Anland Wayland only) |
+| `Ubuntu-26` | Ubuntu 26.04 | `none`, `KDE`, `KDE mobile`, `Mobile`, `GNOME`, `Anland Next` | Yes |
+| `Fedora-43` | Fedora 43 | `none`, `KDE`, `KDE mobile`, `Mobile`, `GNOME`, `Anland Next` | Yes |
+| `Fedora-44` | Fedora 44 | `none`, `KDE`, `KDE mobile`, `Mobile`, `GNOME`, `Anland Next` | Yes |
+| `Arch` | Arch Linux ARM | `none`, `KDE`, `KDE mobile`, `Mobile`, `GNOME`, `Anland Next` | Yes (KDE uses Anland Wayland only) |
 
-`all` filters targets according to desktop/backend support. `all-wayland` builds Debian 13, Ubuntu 26, Fedora 43/44, and Arch for KDE/KDE Mobile, GNOME, and Anland Next. Arch KDE, GNOME, KDE Mobile, and Anland Next force `anland-wayland`.
+`all` filters targets according to desktop/backend support. `all-wayland` builds Debian 13, Ubuntu 26, Fedora 43/44, and Arch for KDE/KDE Mobile, GNOME, and Anland Next. Arch KDE, GNOME, KDE Mobile, Mobile, and Anland Next force `anland-wayland`.
 
 | Desktop | Description |
 | --- | --- |
 | `none` | Command-line environment for SSH, development, or a custom desktop. |
 | `KDE` | KDE Plasma; Arch supports Anland Wayland only, while other supported targets may use X11 or Anland Wayland. |
 | `KDE mobile` | Touch-first Plasma Mobile; requires Anland Wayland. |
+| `Mobile` | A distribution-agnostic touch-friendly app set (contacts, calendar, clocks, weather, maps, browser, terminal); requires Anland Wayland. No mobile shell such as Phosh or Lomiri is installed. |
 | `GNOME` | A full Anland Wayland desktop on Debian 13, Ubuntu 26, Fedora 43/44, and Arch Linux ARM, with a terminal, file manager, settings, system monitor, keyring, portal, and common document/media apps. |
 | `Anland Next` | An Anland session with rootless Xwayland and mini-wm, without a full desktop; Wayland only. |
 | `Niri`, `Hyprland`, `Mango`, `Denial` | **Not in the build matrix.** 6.x launches single apps, so compositor-only profiles are not built. They remain installable manually inside a container via `droidspaces-tui`; they ship a compositor, terminal, XDG portal, audio and fonts, but no application set. |
@@ -33,7 +34,7 @@ Choose the target, desktop, display backend, and optional features on the GitHub
 | --- | --- | --- |
 | `build_target` | Distribution, `all`, `all-wayland`; default `Debian-13` | Select build targets. |
 | `custom_username` | 1–32 letters, digits, `_`, or `-`, starting with a letter or `_`; default `Gold` | Normal RootFS user. |
-| `desktop` | `none`, `KDE`, `KDE mobile`, `GNOME`, `Anland Next`; default `KDE` | Selects the primary desktop, i.e. the one that autostarts; `none` is command-line only. |
+| `desktop` | `none`, `KDE`, `KDE mobile`, `Mobile`, `GNOME`, `Anland Next`; default `KDE` | Selects the primary desktop, i.e. the one that autostarts; `none` is command-line only. |
 | `extra_desktops` | Comma-separated desktop names, e.g. `KDE mobile,GNOME`; empty by default | Additional desktop profiles to build alongside the primary one; leave empty to build only the primary desktop. `none` cannot be combined with other desktops, and the option is ignored for the `all-wayland` target. |
 | `desktop_autostart` | `true` / `false`; default `true` | Installs the desktop startup service; automatically disabled with a log notice when `desktop` is `none`. |
 | `display_backend` | `x11` / `anland-wayland` | Defaults to Wayland in the Chinese workflow and X11 in the English workflow; Arch KDE and some profiles force Wayland. |
@@ -66,7 +67,7 @@ Droidspaces versions with recommendation support prefill their installation wiza
 | `anland-wayland` | `enable_anland=1`; Termux:X11 and PulseAudio off |
 | `x11` | `enable_termux_x11=1`; Anland off |
 | X11 with `socket` audio | `enable_pulseaudio=1`; other audio choices use `0` |
-| KDE or KDE Mobile | `allow_userns=1` |
+| KDE, KDE Mobile, or Mobile | `allow_userns=1` |
 | Docker enabled | `net_mode=nat`; otherwise keep the app default |
 | Snapdragon GPU support enabled | `enable_gpu_mode=1` |
 | Anland Next | `bind_mounts=/data/local/tmp/awl:/run/anland` |

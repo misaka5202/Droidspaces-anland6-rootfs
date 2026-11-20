@@ -226,6 +226,12 @@ set_desktop_component() {
             DESKTOP_COMPONENT_LABEL="Anland Next session"
             DESKTOP_COMPONENT_MODE="direct"
             ;;
+        mobile)
+            # mobile 只提供应用集，没有可更新的 Anland 组件。
+            DESKTOP_COMPONENT=""
+            DESKTOP_COMPONENT_LABEL=""
+            DESKTOP_COMPONENT_MODE="none"
+            ;;
     esac
 }
 
@@ -2168,7 +2174,7 @@ main_menu() {
             print_component_status "3" "$(msg 'Wine 字体' 'Wine fonts')" "fonts"
             if [[ "$DESKTOP_COMPONENT_MODE" == direct ]]; then
                 print_component_status "4" "$DESKTOP_COMPONENT_LABEL" "$DESKTOP_COMPONENT"
-            else
+            elif [[ "$DESKTOP_COMPONENT_MODE" == choose ]]; then
                 printf '  %b[4]%b %s - %s\n' \
                     "$COLOR_CYAN" "$COLOR_RESET" \
                     "$(msg 'Anland 桌面/会话组件' 'Anland desktop/session components')" \
@@ -2204,7 +2210,7 @@ main_menu() {
             4)
                 if [[ "$DESKTOP_COMPONENT_MODE" == direct ]]; then
                     component_menu "$DESKTOP_COMPONENT" "$DESKTOP_COMPONENT_LABEL"
-                else
+                elif [[ "$DESKTOP_COMPONENT_MODE" == choose ]]; then
                     desktop_component_selection_menu
                 fi
                 ;;

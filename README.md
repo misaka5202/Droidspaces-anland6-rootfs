@@ -332,6 +332,7 @@ Inputs added for 6.x:
 
 - Anland 6.x: Debian 13, Ubuntu 26, Fedora 43/44, Arch Linux ARM
 - Ubuntu 24 / 25 do not support Anland (upstream limitation)
+- The `mobile` desktop profile adds a touch-friendly app set (contacts, calendar, clocks, weather, maps, browser, terminal) on top of Debian; it does not install a mobile shell such as Phosh or Lomiri
 > [!CAUTION]
 > **Android 14 (API 34) or newer.** anland6's user-space daemon calls
 > `ANativeWindow_readFromParcel`, an API 34 symbol, with no fallback. On

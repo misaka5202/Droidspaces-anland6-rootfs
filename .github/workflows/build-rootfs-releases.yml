@@ -32,6 +32,7 @@ on:
           - none
           - KDE
           - KDE mobile
+          - Mobile
           - GNOME
           - Anland Next
           - Niri

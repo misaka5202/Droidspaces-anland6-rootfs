@@ -5,6 +5,7 @@ desktop_normalize() {
         none) printf '%s\n' none ;;
         KDE|kde) printf '%s\n' kde ;;
         'KDE mobile'|kde-mobile) printf '%s\n' kde-mobile ;;
+        Mobile|mobile) printf '%s\n' mobile ;;
         GNOME|gnome) printf '%s\n' gnome ;;
         'Anland Next'|anland-next) printf '%s\n' anland-next ;;
         *) return 1 ;;
@@ -16,6 +17,7 @@ desktop_label() {
         none) printf '%s\n' none ;;
         kde) printf '%s\n' KDE ;;
         kde-mobile) printf '%s\n' 'KDE mobile' ;;
+        mobile) printf '%s\n' Mobile ;;
         gnome) printf '%s\n' GNOME ;;
         anland-next) printf '%s\n' 'Anland Next' ;;
         *) return 1 ;;
@@ -61,7 +63,7 @@ desktop_target_supported() {
         gnome)
             case "$target" in Debian-13|Ubuntu-26|Fedora-43|Fedora-44|Arch) return 0 ;; *) return 1 ;; esac
             ;;
-        anland-next)
+        anland-next|mobile)
             case "$target" in
                 Debian-13|Ubuntu-26|Fedora-43|Fedora-44|Arch) return 0 ;;
                 *) return 1 ;;
@@ -94,7 +96,7 @@ desktop_backend_supported() {
         gnome:anland-wayland)
             case "$target" in Debian-13|Ubuntu-26|Fedora-43|Fedora-44|Arch) return 0 ;; *) return 1 ;; esac
             ;;
-        anland-next:anland-wayland)
+        anland-next:anland-wayland|mobile:anland-wayland)
             case "$target" in
                 Debian-13|Ubuntu-26|Fedora-43|Fedora-44|Arch) return 0 ;;
                 *) return 1 ;;

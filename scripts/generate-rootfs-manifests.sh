@@ -39,12 +39,12 @@ declare -A distro_id=(
   [Fedora-43]='Fedora' [Fedora-44]='Fedora' [Arch]='Arch'
 )
 declare -A desktop_name=(
-  [kde]='KDE Plasma' [kde-mobile]='KDE Plasma Mobile' [gnome]='GNOME'
+  [kde]='KDE Plasma' [kde-mobile]='KDE Plasma Mobile' [mobile]='Mobile' [gnome]='GNOME'
   [anland-next]='Anland Next' [niri]='Niri' [hyprland]='Hyprland'
   [mango]='Mango' [denial]='Denial'
 )
 declare -A desktop_label=(
-  [kde]='KDE' [kde-mobile]='KDE mobile' [gnome]='GNOME'
+  [kde]='KDE' [kde-mobile]='KDE mobile' [mobile]='Mobile' [gnome]='GNOME'
   [anland-next]='Anland Next' [niri]='Niri' [hyprland]='Hyprland'
   [mango]='Mango' [denial]='Denial'
 )
@@ -65,6 +65,7 @@ declare -A distro_detail_en=(
 declare -A desktop_detail_zh=(
   [kde]='集成 Plasma 桌面、Anland 专用 KWin/Xwayland、Dolphin 文件管理器、Konsole 终端和系统设置'
   [kde-mobile]='集成面向触屏的 Plasma Mobile、Maliit 屏幕键盘、Angelfish 浏览器和 Anland Wayland 会话'
+  [mobile]='集成面向触屏的 GNOME 移动应用（通讯录、日历、时钟、天气、地图、浏览器、终端）与 Anland Wayland 会话，不预装移动 shell'
   [gnome]='集成 GNOME Shell、Mutter、设置中心、文件管理器、终端、密钥环和常用桌面应用'
   [anland-next]='提供 Anland Next 会话、rootless Xwayland 与 mini-wm，适合在轻量图形环境中运行桌面应用'
   [niri]='提供 Niri 平铺合成器、Wayland 门户、终端、状态栏、音频服务和常用字体，不预装完整桌面套件'
@@ -75,6 +76,7 @@ declare -A desktop_detail_zh=(
 declare -A desktop_detail_en=(
   [kde]='Includes the Plasma desktop, Anland-patched KWin/Xwayland, Dolphin file manager, Konsole terminal, and system settings'
   [kde-mobile]='Includes touch-focused Plasma Mobile, the Maliit on-screen keyboard, Angelfish browser, and an Anland Wayland session'
+  [mobile]='Includes touch-friendly GNOME mobile apps (contacts, calendar, clocks, weather, maps, browser, terminal) and an Anland Wayland session, without a mobile shell'
   [gnome]='Includes GNOME Shell, Mutter, Settings, Files, Terminal, keyring integration, and common desktop applications'
   [anland-next]='Provides the Anland Next session, rootless Xwayland, and mini-wm for running desktop applications in a lightweight graphical environment'
   [niri]='Provides the Niri tiling compositor, Wayland portals, terminal, status bar, audio services, and common fonts without a full desktop suite'

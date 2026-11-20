@@ -89,6 +89,10 @@ if [[ "$desktop" == kde && "$backend" == x11 && "$ID" =~ ^(arch|archarm|archlinu
     echo "Arch Linux 不支持 KDE X11；请使用 Anland Wayland。" >&2
     exit 1
 fi
+if [[ "$desktop" == mobile && "$backend" != anland-wayland ]]; then
+    echo "不支持的桌面与显示后端组合：$desktop/$backend" >&2
+    exit 1
+fi
 if [[ "$desktop" == kde-mobile && "$backend" != anland-wayland ]]; then
     echo "不支持的桌面与显示后端组合：$desktop/$backend" >&2
     exit 1
