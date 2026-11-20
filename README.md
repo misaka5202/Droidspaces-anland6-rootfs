@@ -60,7 +60,7 @@ Host-side components, their roles and how they fail are covered in
 | --- | --- | --- |
 | `module/anland-awl.zip` | **[misaka5202/anland](https://github.com/misaka5202/anland/releases/latest)** (latest release) | the `waylandbridge` daemon, with the IME fixes |
 | `anland-wayland.apk` | same | `com.anlandnext`, the window consumer, with the extra-keys bar |
-| `anland-shell.apk` | **[misaka5202/anland-shell v1.1.1](https://github.com/misaka5202/anland-shell/releases/tag/v1.1.1)** | patched build, see below |
+| `anland-shell.apk` | **[misaka5202/anland-shell v1.1.3](https://github.com/misaka5202/anland-shell/releases/tag/v1.1.3)** | patched build, see below |
 | `anlandx.tar.gz` | **[misaka5202/anland](https://github.com/misaka5202/anland/releases/latest)** (latest release; also already inside the images built here) | the `anlandx` session inside the container |
 
 ### Why the modified build (misaka5202/anland)
@@ -118,7 +118,7 @@ still exiting 0, so the running set parses as empty, every container shows
 Upstream PR [SuperTurtleDev/anland-shell#2](https://github.com/SuperTurtleDev/anland-shell/pull/2)
 (2026-11-13) fixes it; it is not merged.
 
-`v1.1.1` changes: prefer `show --json`, fall back to `show --format`, strip
+`v1.1.3` changes: prefer `show --json`, fall back to `show --format`, strip
 ANSI escapes before parsing. Verified on OPPO PHZ110 / MT6989 / Android 17 /
 Droidspaces 7.2.0.
 
@@ -259,7 +259,7 @@ Launch problems:
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| container shows `stopped` while it runs | anland-shell incompatible with Droidspaces ≥7.2.0 | use `v1.1.1` |
+| container shows `stopped` while it runs | anland-shell incompatible with Droidspaces ≥7.2.0 | use `v1.1.3` |
 | `no containers defined` | `com.anland.shell` has no root | grant root |
 | `APPS` reports `Anlandx not installed` | container not running | `START` first |
 | clicks do nothing | see the next section | read the daemon log |

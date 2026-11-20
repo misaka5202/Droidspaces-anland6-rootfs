@@ -41,7 +41,7 @@ set -euo pipefail
 
 USERNAME_IN="${1:-}"
 RELEASE_REPO="${ANLAND_RELEASE_REPO:-misaka5202/anland}"
-# 改版从 6.2-ds6 起发独立文件（不再是 anland-build.2.zip 整包）
+# 改版从 v6.2.6 起发独立文件（不再是 anland-build.2.zip 整包）
 BUILD_ZIP_NAME="${ANLAND_BUILD_ZIP:-anlandx.tar.gz}"
 WANT_XWAYLAND="${ANLAND_XWAYLAND:-0}"
 MARKER=/etc/droidspaces-anland-major
