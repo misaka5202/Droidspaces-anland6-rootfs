@@ -50,7 +50,9 @@ SC_ENABLED=0
 
 # 打过 Droidspaces 7.2.0 兼容补丁的 anland-shell。
 # 官方的 1.1 在 7.2.0 上容器列表失效；这个包先试 --json 再回退 --format。
-SHELL_APK_URL="https://github.com/misaka5202/anland-shell/releases/download/v1.1-ds73/anland-shell.apk"
+# 跟随最新发布（releases/latest 会 302 到最新 tag 的同一个文件），
+# 以后不用每次发版都改这里；需要复现旧版本时显式钉 tag。
+SHELL_APK_URL="https://github.com/misaka5202/anland-shell/releases/latest/download/anland-shell.apk"
 
 # 宿主模块 / APK 的来源：改版（misaka5202/anland）。
 # 上游 6.2 的整包叫 anland-build.2.zip（module/anland-awl.zip 在里面）；

@@ -115,7 +115,7 @@ patched build for a different reason.
 | --- | --- | --- |
 | `module/anland-awl.zip` | **fork, not upstream** | [misaka5202/anland](https://github.com/misaka5202/anland/releases/latest) (latest) |
 | `anland-wayland.apk` | **fork, not upstream** | same |
-| **`anland-shell.apk`** | **patched build, not upstream 1.1** | **[misaka5202/anland-shell v1.1-ds73](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)** |
+| **`anland-shell.apk`** | **patched build, not upstream 1.1** | **[misaka5202/anland-shell v1.1.1](https://github.com/misaka5202/anland-shell/releases/tag/v1.1.1)** |
 | `anlandx.tar.gz` | **fork** (also baked into this image) | [misaka5202/anland](https://github.com/misaka5202/anland/releases/latest) (latest) |
 
 **Why items 1, 2 and 4 must come from the fork**
@@ -165,7 +165,7 @@ every container shows stopped -> APPS is blocked -> apps never start -> no pictu
 The fix, [SuperTurtleDev/anland-shell#2](https://github.com/SuperTurtleDev/anland-shell/pull/2),
 was opened on **2026-11-13 and is still unmerged**, so no official release carries it.
 
-`v1.1-ds73` carries two fixes:
+`v1.1.1` carries two fixes:
 
 - ask for `show --json` first, fall back to `show --format`, strip ANSI escapes
   before parsing (the upstream PR above, still unmerged);
@@ -186,8 +186,9 @@ su -c 'droidspaces show --format'  # "Unknown or incomplete option"
 # both true -> you need the patched build
 ```
 
-> `setup-anland6-host.sh` reads the Droidspaces version and downloads `v1.1-ds73`
-> automatically when it is ≥ 7.2.0, so you do not have to pick.
+> `setup-anland6-host.sh` reads the Droidspaces version and downloads the
+> patched build from the latest anland-shell release automatically when it is
+> ≥ 7.2.0, so you do not have to pick.
 
 **① Flash `anland-awl` and reboot.** Download
 [`anland-awl.zip`](https://github.com/misaka5202/anland/releases/latest)
@@ -208,7 +209,7 @@ shows `no containers defined`.
 > removed** in favour of `show --json`. The old flag prints
 > `Unknown or incomplete option` on stdout while still exiting 0, so every
 > container renders as `stopped` and the app grid refuses to open. Use the
-> patched [v1.1-ds73 build](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73);
+> patched [v1.1.1 build](https://github.com/misaka5202/anland-shell/releases/tag/v1.1.1);
 > the upstream fix is [PR #2](https://github.com/SuperTurtleDev/anland-shell/pull/2).
 
 **③ Add the bind mount (required, do not skip).** The daemon publishes its socket
@@ -312,7 +313,7 @@ Four things can go wrong at this step:
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| container shows `stopped` while it actually runs | anland-shell incompatible with Droidspaces ≥7.2.0 | use the [patched build](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73) |
+| container shows `stopped` while it actually runs | anland-shell incompatible with Droidspaces ≥7.2.0 | use the [patched build](https://github.com/misaka5202/anland-shell/releases/tag/v1.1.1) |
 | shows `no containers defined` | app has no root | grant root in your root manager |
 | `APPS` reports `Anlandx not installed` | the container is not running | start it first |
 | tapping an app does nothing | see "When there is no picture" | read the daemon log |

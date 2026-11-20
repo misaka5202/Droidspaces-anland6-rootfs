@@ -57,7 +57,7 @@ adb shell su -c 'sh /data/local/tmp/verify-anland6-host.sh'
 | --- | --- | --- |
 | `module/anland-awl.zip` | **[misaka5202/anland](https://github.com/misaka5202/anland/releases/latest)**（最新发布） | `waylandbridge` 守护进程（含输入修复） |
 | `anland-wayland.apk` | 同上 | `com.anlandnext`，窗口消费者（含额外按键栏） |
-| `anland-shell.apk` | **[misaka5202/anland-shell v1.1-ds73](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)** | 补丁版，见下 |
+| `anland-shell.apk` | **[misaka5202/anland-shell v1.1.1](https://github.com/misaka5202/anland-shell/releases/tag/v1.1.1)** | 补丁版，见下 |
 | `anlandx.tar.gz` | **[misaka5202/anland](https://github.com/misaka5202/anland/releases/latest)**（最新发布；本仓库镜像也已内置） | 容器内 `anlandx` 会话 |
 
 ### 为什么必须用改版（misaka5202/anland）
@@ -106,7 +106,7 @@ Droidspaces 7.2.0（2026-11-07）移除该参数，改为 `show --json`。旧参
 上游 PR [SuperTurtleDev/anland-shell#2](https://github.com/SuperTurtleDev/anland-shell/pull/2)
 （2026-11-13）修复，未合并。
 
-`v1.1-ds73` 改动：`show --json` 优先、`show --format` 回退、解析前剥离 ANSI
+`v1.1.1` 改动：`show --json` 优先、`show --format` 回退、解析前剥离 ANSI
 转义。验证环境 OPPO PHZ110 / MT6989 / Android 17 / Droidspaces 7.2.0。
 
 判定是否需要补丁版：
@@ -236,7 +236,7 @@ anland-shell → 容器 → START → APPS → 应用
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1-ds73` |
+| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1.1` |
 | `no containers defined` | `com.anland.shell` 无 root | 授权 |
 | `APPS` 报 `Anlandx not installed` | 容器未运行 | 先 `START` |
 | 点击无响应 | 见下节 | 查 daemon 日志 |

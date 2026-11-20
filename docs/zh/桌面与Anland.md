@@ -116,7 +116,7 @@ tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh
 | --- | --- | --- |
 | `module/anland-awl.zip` | **改版，非上游**（上游 6.2 输入不可用） | [misaka5202/anland](https://github.com/misaka5202/anland/releases/latest)（最新发布） |
 | `anland-wayland.apk` | 同一个压缩包里 | 同上 |
-| **`anland-shell.apk`** | **补丁版，不要用上游 1.1** | **[misaka5202/anland-shell v1.1-ds73](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)** |
+| **`anland-shell.apk`** | **补丁版，不要用上游 1.1** | **[misaka5202/anland-shell v1.1.1](https://github.com/misaka5202/anland-shell/releases/tag/v1.1.1)** |
 | `anlandx.tar.gz` | 本仓库镜像已内置 | — |
 
 
@@ -161,7 +161,7 @@ i18n、以及 IME 合成按键的 evdev 码完整映射（它们恒为 `scanCode
 修复 PR [SuperTurtleDev/anland-shell#2](https://github.com/SuperTurtleDev/anland-shell/pull/2)
 **2026-11-13 就提了，至今未合并**，所以官方 release 里没有修好的包。
 
-补丁版 `v1.1-ds73` 有两处修复：
+补丁版 `v1.1.1` 有两处修复：
 
 - 先请求 `show --json`，失败再回退 `show --format`，解析前剥离 ANSI 转义
   （即上面那个上游 PR，至今未合并）；
@@ -180,8 +180,8 @@ su -c 'droidspaces show --format'  # 报 Unknown or incomplete option
 # 两条同时成立 → 你需要补丁版
 ```
 
-> `setup-anland6-host.sh` 会读 Droidspaces 版本，≥7.2.0 时自动从 `v1.1-ds73`
-> 下载，不用手动挑。
+> `setup-anland6-host.sh` 会读 Droidspaces 版本，≥7.2.0 时自动从
+> anland-shell 的最新发布下载补丁版，不用手动挑。
 
 下面按顺序做。**任何一步没做对都没有画面**，而且失败现象往往很相似
 （黑屏 / 列表为空 / 窗口不出现），所以做完建议用诊断脚本验一次。
@@ -214,7 +214,7 @@ pm install -r anland-shell.apk        # com.anland.shell：容器/应用启动�
 > 而 Droidspaces **7.2.0 起改用 `show --json`**，旧参数会报错但仍返回 0，
 > 导致所有容器显示成 `stopped`、应用网格点不开。
 >
-> 用 [`misaka5202/anland-shell v1.1-ds73`](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)
+> 用 [`misaka5202/anland-shell v1.1.1`](https://github.com/misaka5202/anland-shell/releases/tag/v1.1.1)
 > 的补丁版（先试 `--json` 再回退）。上游修复见
 > [PR #2](https://github.com/SuperTurtleDev/anland-shell/pull/2)，合并后可换回官方包。
 >
@@ -306,7 +306,7 @@ anland-shell → 容器 → START → APPS → 应用
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1-ds73` |
+| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1.1` |
 | `no containers defined` | `com.anland.shell` 无 root | 授权 |
 | `APPS` 报 `Anlandx not installed` | 容器未运行 | 先 `START` |
 | 点击无响应 | 见「无画面定位」 | 查 daemon 日志 |
@@ -326,7 +326,7 @@ anland-shell → 容器 → START → APPS → 应用
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
 | `no wayland socket at /run/anland/wayland-0` | 容器无法访问 socket | 补 ③ 绑定挂载 |
-| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1-ds73` |
+| 容器显示 `stopped`，实际在运行 | anland-shell 与 Droidspaces ≥7.2.0 不兼容 | 换 `v1.1.1` |
 | `no containers defined` | `com.anland.shell` 无 root | 授权 |
 | 窗口列表为 0，daemon 正常 | 客户端未提交首帧 | 查日志分界 |
 | 画面变形 | `scale_mode=0`（Stretch） | 改 `Fit` |
