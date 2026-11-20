@@ -265,10 +265,10 @@ fi
 # GPU 厂商相关的环境变量：高通走 kgsl，MTK 走 libhybris + 厂商 Mali
     /usr/local/sbin/configure-gpu "${GPU_VENDOR_ARG:-qualcomm}" \
         "$DISPLAY_BACKEND" "${ENABLE_mesa_ARG:-false}"
-    echo 'export XDG_RUNTIME_DIR=/run/user/$(id -u)' >> /home/${USERNAME}/.bashrc
+    echo 'export XDG_RUNTIME_DIR=/run/user/$(id -u)' >> /home/${USERNAME}/.bashrc && \
     # /run/user 是 tmpfs，容器每次重启都会清空；systemd --user（anland-session）
     # 需要它在登录前就存在。tmpfiles.d 在每次系统启动时重建该目录。
-    && printf 'd /run/user/%s 0700 %s %s -
+    printf 'd /run/user/%s 0700 %s %s -
 ' "$(id -u ${USERNAME})" "${USERNAME}" "${USERNAME}" > /etc/tmpfiles.d/anland-session.conf
     /usr/local/sbin/configure-desktop "$DESKTOP" "$DISPLAY_BACKEND" "$DESKTOP_AUTOSTART" "$USERNAME"
     # 6.x：configure-desktop 按 5.x 写了 /etc/environment（ANLAND_SOCKET、
