@@ -156,6 +156,12 @@ sudo ./scripts/tui/install-anland-next.sh
 
 Anland Next profile 默认让 Qt 6 应用使用原生 Wayland，并显式安装对应平台插件；直接通过终端启动时，用户 shell 会读取运行中的 `~/.anlandx-env`。
 
+### 音频
+
+anland-wayland 镜像带一套系统级音频桥接（仅在该后端安装）：`scripts/etc/pipewire/pipewire.conf.d/anland-pulse-tunnel.conf` 装成 `/etc/pipewire/pipewire.conf.d/` 的 drop-in，用 `libpipewire-module-pulse-tunnel` 建一个 sink，指向主机 PulseAudio 的 `/run/anland/pulse.sock`（主机 daemon 的 `pulse/` 模块渲染进 Android）。它是镜像里唯一的真实 sink，因此成为 WirePlumber 的默认 sink，原生 PipeWire 客户端（`pw-cat`/`pw-play`、OBS、游戏、Plasma 自身音效）也能出声。
+
+隧道会随主机连接一起消失，所以 `scripts/anland-audio-watch` 装成 `/usr/local/lib/anland/anland-audio-watch`，由 `/usr/lib/systemd/user/anland-audio-watch.service` 在主机 socket 存在而 `anland` sink 不在时重启音频栈重建它，带退避避免重启循环。libpulse 客户端走会话发布的 `~/.anlandx-env`（`PULSE_SERVER`），不依赖这套桥接。
+
 使用公开 Fork 的包时覆盖仓库变量：
 
 ```bash

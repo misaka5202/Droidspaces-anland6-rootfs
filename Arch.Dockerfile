@@ -55,6 +55,19 @@ RUN if [ "$DISPLAY_BACKEND" = "anland-wayland" ]; then \
     fi && \
     rm -f /tmp/Anland-Audio.conf
 
+# anland 音频桥接：容器 PipeWire 直连主机 PulseAudio（原生 PipeWire 客户端）
+COPY scripts/etc/pipewire/pipewire.conf.d/anland-pulse-tunnel.conf /tmp/anland-pulse-tunnel.conf
+COPY scripts/etc/systemd/user/anland-audio-watch.service /tmp/anland-audio-watch.service
+COPY scripts/anland-audio-watch /tmp/anland-audio-watch
+RUN if [ "$DISPLAY_BACKEND" = "anland-wayland" ]; then \
+        install -D -m 0644 /tmp/anland-pulse-tunnel.conf /etc/pipewire/pipewire.conf.d/anland-pulse-tunnel.conf; \
+        install -D -m 0755 /tmp/anland-audio-watch /usr/local/lib/anland/anland-audio-watch; \
+        install -D -m 0644 /tmp/anland-audio-watch.service /usr/lib/systemd/user/anland-audio-watch.service; \
+        install -d -m 0755 /etc/systemd/user/default.target.wants; \
+        ln -sfn /usr/lib/systemd/user/anland-audio-watch.service /etc/systemd/user/default.target.wants/anland-audio-watch.service; \
+    fi && \
+    rm -f /tmp/anland-pulse-tunnel.conf /tmp/anland-audio-watch /tmp/anland-audio-watch.service
+
 RUN chmod +x /usr/local/sbin/install-anland-* /usr/local/sbin/install-anland6 /usr/local/sbin/configure-anland6-env /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
     ln -s droidspaces-tui /usr/local/bin/dstui && \
     ln -s droidspaces-tui /usr/local/bin/ds-tui && \

@@ -154,6 +154,12 @@ The session itself is the packaged `/usr/bin/anland-session` (session D-Bus + wa
 
 The Anland Next profile defaults Qt 6 applications to native Wayland and explicitly installs its platform plugin; an interactive user shell imports `~/.anlandx-env` while the session is running. Kate launchers consistently use `kate -b`, avoiding its no-window exit in a minimal session. Legacy X11/XCB applications remain compatible through the packaged Xwayland, without injecting additional Qt/X11 scaling variables.
 
+### Audio
+
+The anland-wayland images ship a system-level audio bridge (installed for that backend only): `scripts/etc/pipewire/pipewire.conf.d/anland-pulse-tunnel.conf` is installed as an `/etc/pipewire/pipewire.conf.d/` drop-in that loads `libpipewire-module-pulse-tunnel` as a sink pointed at the host PulseAudio socket `/run/anland/pulse.sock` (the host daemon's `pulse/` module renders into Android). It is the only real sink in the image, so WirePlumber makes it the default and native PipeWire clients (`pw-cat`/`pw-play`, OBS, games, Plasma's own sounds) are audible too.
+
+The tunnel dies with its host connection, so `scripts/anland-audio-watch` is installed as `/usr/local/lib/anland/anland-audio-watch` and driven by `/usr/lib/systemd/user/anland-audio-watch.service`: when the host socket is present but the `anland` sink is not, it restarts the audio stack to rebuild it, with backoff to avoid a restart loop. libpulse clients go through the session-published `~/.anlandx-env` (`PULSE_SERVER`) and do not depend on this bridge.
+
 To use packages from a public fork, override the repository variable:
 
 ```bash

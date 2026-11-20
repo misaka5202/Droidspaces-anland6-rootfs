@@ -1,0 +1,16 @@
+[Unit]
+Description=anland PipeWire tunnel sink watchdog
+# Runs only where the tunnel drop-in exists (the script exits at once
+# otherwise). Restarting the audio stack is the only way back after the
+# tunnel's host connection died.
+After=pipewire.service pipewire-pulse.service wireplumber.service
+Wants=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/anland/anland-audio-watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

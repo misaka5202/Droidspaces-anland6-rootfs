@@ -1,0 +1,35 @@
+#!/bin/bash
+# anland-audio-watch — keep the anland PipeWire tunnel sink alive.
+#
+# libpipewire-module-pulse-tunnel connects to the host PulseAudio once and is
+# destroyed together with that connection: a host daemon restart (module
+# update, daemon reboot) drops it, and the container's only remaining sink
+# becomes the auto_null fallback — native PipeWire apps go silent until the
+# whole desktop session is restarted. The host socket is recreated a moment
+# later, so re-create the tunnel by restarting the audio stack.
+#
+# Back off while the socket is there and the tunnel still fails to appear, so
+# a host daemon that is down (or a PulseAudio that refuses the tunnel) cannot
+# turn this into a restart loop.
+#
+# Installed only in the anland-wayland images (see the Dockerfiles); without
+# the drop-in below this exits at once. Runs as a systemd user service.
+set -u
+
+DROPIN="/etc/pipewire/pipewire.conf.d/anland-pulse-tunnel.conf"
+[ -f "$DROPIN" ] || exit 0
+command -v pw-dump >/dev/null 2>&1 || exit 0
+
+SOCK="${ANLAND_RUNTIME_DIR:-/run/anland}/pulse.sock"
+backoff=5
+
+while true; do
+    if [ -S "$SOCK" ] && ! pw-dump 2>/dev/null | grep -q '"node.name": "anland"'; then
+        systemctl --user restart pipewire pipewire-pulse wireplumber >/dev/null 2>&1 || true
+        sleep "$backoff"
+        backoff=$(( backoff < 30 ? backoff * 2 : 30 ))
+    else
+        backoff=5
+        sleep 5
+    fi
+done
