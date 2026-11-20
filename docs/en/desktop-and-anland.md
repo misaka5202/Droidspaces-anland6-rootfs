@@ -99,8 +99,8 @@ Anland 6.x needs **four** host-side pieces. Missing any one means no picture:
 | 3 | `anland-shell.apk` | `pm install` + **grant root** | `com.anland.shell`: launcher, lists containers/apps and starts them | no entry point to launch apps |
 | 4 | `anlandx.tar.gz` | **already baked into this image** | the container-side `anlandx` session | no `anland-session` in the container |
 
-Items 1–3 come from the **[misaka5202/anland 6.2-ds6
-release](https://github.com/misaka5202/anland/releases/tag/6.2-ds6)** — the fork,
+Items 1–3 come from the **[misaka5202/anland
+release](https://github.com/misaka5202/anland/releases/latest)** — the fork,
 not upstream, because upstream 6.2 cannot type (see below). Item 4 is installed
 during the image build; only foreign images need
 `tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh`.
@@ -113,10 +113,10 @@ patched build for a different reason.
 
 | File | Where | Direct link |
 | --- | --- | --- |
-| `module/anland-awl.zip` | **fork, not upstream** | [misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6) |
+| `module/anland-awl.zip` | **fork, not upstream** | [misaka5202/anland](https://github.com/misaka5202/anland/releases/latest) (latest) |
 | `anland-wayland.apk` | **fork, not upstream** | same |
 | **`anland-shell.apk`** | **patched build, not upstream 1.1** | **[misaka5202/anland-shell v1.1-ds73](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)** |
-| `anlandx.tar.gz` | **fork** (also baked into this image) | [misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6) |
+| `anlandx.tar.gz` | **fork** (also baked into this image) | [misaka5202/anland](https://github.com/misaka5202/anland/releases/latest) (latest) |
 
 **Why items 1, 2 and 4 must come from the fork**
 
@@ -190,7 +190,7 @@ su -c 'droidspaces show --format'  # "Unknown or incomplete option"
 > automatically when it is ≥ 7.2.0, so you do not have to pick.
 
 **① Flash `anland-awl` and reboot.** Download
-[`anland-awl.zip`](https://github.com/misaka5202/anland/releases/tag/6.2-ds6)
+[`anland-awl.zip`](https://github.com/misaka5202/anland/releases/latest)
 from the fork release (upstream 6.2 has the input defects described above),
 flash it with KernelSU/APatch.
 

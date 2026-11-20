@@ -135,10 +135,10 @@ on:
           - '6'
           - '5'
       anland6_version:
-        description: 'The anland 6.x release tag'
+        description: 'The anland 6.x release tag, or latest to follow the newest release'
         required: false
         type: string
-        default: '6.2-ds7'
+        default: 'latest'
       gpu_vendor:
         description: GPU vendor (qualcomm = Adreno hardware acceleration; mediatek = libhybris + /dev/mali0, requires mali_nsfix)
         required: true

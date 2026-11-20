@@ -114,7 +114,7 @@ tar xzf anlandx.tar.gz && bash anlandx/setupanlandx.sh
 
 | 文件 | 从哪下 | 直链 |
 | --- | --- | --- |
-| `module/anland-awl.zip` | **改版，非上游**（上游 6.2 输入不可用） | [misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6) |
+| `module/anland-awl.zip` | **改版，非上游**（上游 6.2 输入不可用） | [misaka5202/anland](https://github.com/misaka5202/anland/releases/latest)（最新发布） |
 | `anland-wayland.apk` | 同一个压缩包里 | 同上 |
 | **`anland-shell.apk`** | **补丁版，不要用上游 1.1** | **[misaka5202/anland-shell v1.1-ds73](https://github.com/misaka5202/anland-shell/releases/tag/v1.1-ds73)** |
 | `anlandx.tar.gz` | 本仓库镜像已内置 | — |
@@ -188,7 +188,7 @@ su -c 'droidspaces show --format'  # 报 Unknown or incomplete option
 
 **① 刷 `anland-awl` 模块并重启**
 
-从 **[misaka5202/anland 6.2-ds6](https://github.com/misaka5202/anland/releases/tag/6.2-ds6)** 下载 `anland-awl.zip`（上游 6.2 有下面说的输入缺陷），用 KernelSU/APatch 刷入。
+从 **[misaka5202/anland](https://github.com/misaka5202/anland/releases/latest)** 下载 `anland-awl.zip`（上游 6.2 有下面说的输入缺陷），用 KernelSU/APatch 刷入。
 
 **刷完必须重启。** 模块在 `modules_update/` 里躺着的时候，`waylandbridge`
 不会运行，`/data/local/tmp/awl/wayland-0` 也就不存在 —— 这是最常见的失败原因。

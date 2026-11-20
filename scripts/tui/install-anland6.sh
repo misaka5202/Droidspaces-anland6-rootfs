@@ -26,7 +26,7 @@
 #   install-anland6.sh <桌面用户> [版本]
 #
 # 环境变量
-#   ANLAND_VERSION        anland release tag，默认 6.2
+#   ANLAND_VERSION        anland release tag，默认 latest（跟随最新发布）
 #   ANLAND_RELEASE_REPO   发布仓库，默认 misaka5202/anland（改版）
 #   ANLAND_XWAYLAND       1=编译 patched Xwayland，默认 0（见下）
 #
@@ -106,7 +106,7 @@ if [ -f /etc/os-release ]; then
     # shellcheck disable=SC1091
     . /etc/os-release
 fi
-ANLAND_TAG="${ANLAND_VERSION:-6.2-ds6}"
+ANLAND_TAG="${ANLAND_VERSION:-latest}"
 case "${ID:-}" in
     debian|ubuntu) install_deps_apt ;;
     fedora|rhel|centos) install_deps_dnf ;;
@@ -128,7 +128,11 @@ install -d -m 0755 "$TMP"
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
-URL="https://github.com/${RELEASE_REPO}/releases/download/${ANLAND_TAG}/${BUILD_ZIP_NAME}"
+if [ "$ANLAND_TAG" = latest ]; then
+    URL="https://github.com/${RELEASE_REPO}/releases/latest/download/${BUILD_ZIP_NAME}"
+else
+    URL="https://github.com/${RELEASE_REPO}/releases/download/${ANLAND_TAG}/${BUILD_ZIP_NAME}"
+fi
 log "下载 $URL"
 if ! curl -fsSL --retry 3 --max-time 300 -o "$TMP/anlandx.tar.gz" "$URL"; then
     echo "下载失败：$URL" >&2

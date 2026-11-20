@@ -55,9 +55,15 @@ SHELL_APK_URL="https://github.com/misaka5202/anland-shell/releases/download/v1.1
 # 宿主模块 / APK 的来源：改版（misaka5202/anland）。
 # 上游 6.2 的整包叫 anland-build.2.zip（module/anland-awl.zip 在里面）；
 # 改版从 6.2-ds6 起直接发独立文件，所以这里按独立文件下载。
+# 默认跟随最新发布（releases/latest 会 302 到最新 tag 的同一个文件）；
+# 需要复现旧版本时显式固定，例如 AWL_RELEASE_TAG=6.2-ds6。
 AWL_RELEASE_REPO="${AWL_RELEASE_REPO:-misaka5202/anland}"
-AWL_RELEASE_TAG="${AWL_RELEASE_TAG:-6.2-ds6}"
-AWL_RELEASE_URL="https://github.com/${AWL_RELEASE_REPO}/releases/download/${AWL_RELEASE_TAG}"
+AWL_RELEASE_TAG="${AWL_RELEASE_TAG:-}"
+if [ -n "$AWL_RELEASE_TAG" ]; then
+    AWL_RELEASE_URL="https://github.com/${AWL_RELEASE_REPO}/releases/download/${AWL_RELEASE_TAG}"
+else
+    AWL_RELEASE_URL="https://github.com/${AWL_RELEASE_REPO}/releases/latest/download"
+fi
 
 WORK=""
 DRY_RUN=0
