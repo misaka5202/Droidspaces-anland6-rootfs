@@ -58,66 +58,23 @@ configure_environment() {
 
 install_apt() {
     case "$ID:$VERSION_ID" in
-        debian:13)
-            apt-get install -y --no-install-recommends \
-                dbus-x11 dbus-user-session xdg-user-dirs curl unzip python3 \
-                pipewire pipewire-alsa pipewire-pulse wireplumber \
-                vulkan-tools mesa-utils wayland-utils \
-                libva2 libibus-1.0-0 libvpx7 libvpx-dev \
-                libxcomposite1 libxcursor1 libxrandr2 libxi6 libx11-xcb1 \
-                libxcb-dri3-0 libxcb-present0 libxcb-sync1 \
-                libgl1 libglvnd0 libvulkan1 \
-                fonts-noto-cjk fonts-noto-color-emoji fonts-noto-core \
-                bash-completion ca-certificates
-            ;;
-        ubuntu:26.04)
-            apt-get install -y --no-install-recommends \
-                dbus-x11 dbus-user-session xdg-user-dirs curl unzip python3 \
-                pipewire pipewire-alsa pipewire-pulse wireplumber \
-                vulkan-tools mesa-utils wayland-utils \
-                libva2 libibus-1.0-0 libvpx7 libvpx-dev \
-                libxcomposite1 libxcursor1 libxrandr2 libxi6 libx11-xcb1 \
-                libxcb-dri3-0 libxcb-present0 libxcb-sync1 \
-                libgl1 libglvnd0 libvulkan1 \
-                fonts-noto-cjk fonts-noto-color-emoji fonts-noto-core \
-                bash-completion ca-certificates language-pack-zh-hans
+        debian:13|ubuntu:26.04)
+            apt-get install -y --no-install-recommends                 curl unzip python3 dbus-x11 dbus-user-session xdg-user-dirs
             ;;
         *)
-            echo "Steam Gaming 不支持当前系统：$ID $VERSION_ID" >&2
+            echo "Steam Gaming apt unsupported: $ID $VERSION_ID" >&2
             return 1
             ;;
     esac
 }
 
 install_fedora() {
-    case "$VERSION_ID" in
-        43|44) ;;
-        *) echo "Steam Gaming 不支持 Fedora $VERSION_ID" >&2; return 1 ;;
-    esac
-
-    dnf install -y --setopt=install_weak_deps=False \
-        dbus-x11 dbus-user-session xdg-user-dirs curl unzip python3 \
-        pipewire pipewire-alsa pipewire-pulseaudio wireplumber \
-        vulkan-tools mesa-utils wayland-utils \
-        libva libibus libvpx-devel libvpx7 \
-        libXcomposite libXcursor libXrandr libXi libX11-xcb \
-        libxcb-dri3 libxcb-present libxcb-sync \
-        mesa-libGL libglvnd libvulkan \
-        google-noto-cjk-fonts google-noto-emoji-color-fonts google-noto-sans-fonts \
-        bash-completion ca-certificates
+    case "$VERSION_ID" in 43|44) ;; *) return 1 ;; esac
+    dnf install -y --setopt=install_weak_deps=False         curl unzip python3 dbus-x11 dbus-user-session xdg-user-dirs
 }
 
 install_arch() {
-    pacman -S --noconfirm --needed \
-        dbus-x11 dbus-user-session xdg-user-dirs curl unzip python3 \
-        pipewire pipewire-alsa pipewire-pulse wireplumber \
-        vulkan-tools mesa-utils wayland-utils \
-        libva libibus libvpx libvpx12 \
-        libxcomposite libxcursor libxrandr libxi libx11-xcb \
-        libxcb-dri3 libxcb-present libxcb-sync \
-        mesa libglvnd vulkan-icd-loader vulkan-freedreno \
-        noto-fonts-cjk noto-fonts-emoji noto-fonts \
-        bash-completion ca-certificates
+    pacman -S --noconfirm --needed         curl unzip python3 dbus-x11 dbus-user-session xdg-user-dirs
 }
 
 install_profile() {
