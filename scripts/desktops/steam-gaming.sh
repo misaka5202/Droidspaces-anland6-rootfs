@@ -88,12 +88,7 @@ install_profile() {
 
     # 2. Steam ARM64 client + FEX + desktop launcher
     #    ROOTFS_DIR is inherited from the Docker build context (empty = current rootfs)
-    if command -v install-steam >/dev/null 2>&1; then
-        echo "--> 正在装配 Steam ARM64 client + FEX"
-        install-steam --channel publicbeta
-    else
-        echo "!! install-steam 脚本未找到，跳过 Steam 装配" >&2
-        echo "   请确认 Dockerfile 已 COPY scripts/tui/install-steam.sh 到 /usr/local/sbin/" >&2
+    echo "[SKIP] install-steam temporarily disabled for CI debug"le 已 COPY scripts/tui/install-steam.sh 到 /usr/local/sbin/" >&2
     fi
 }
 
