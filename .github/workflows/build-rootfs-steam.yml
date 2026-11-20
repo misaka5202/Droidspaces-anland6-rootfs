@@ -153,18 +153,18 @@ jobs:
 
           notes_file="$RUNNER_TEMP/rootfs-release-notes.md"
           cat > "$notes_file" <<'EOF'
-## English
+          ## English
 
-Droidspaces Steam Gaming RootFS — a dedicated ARM64 image with Valve ARM64 Steam client, FEX x86 emulation, and game-grade system deps pre-installed. Windows games run through Proton (auto-downloaded on first use) + Turnip (Adreno) or libhybris (Mali).
+          Droidspaces Steam Gaming RootFS — a dedicated ARM64 image with Valve ARM64 Steam client, FEX x86 emulation, and game-grade system deps pre-installed. Windows games run through Proton (auto-downloaded on first use) + Turnip (Adreno) or libhybris (Mali).
 
-This release covers **Chinese** builds in Qualcomm Adreno and MediaTek variants:
-- Distributions: Debian 13, Ubuntu 26.04, Fedora 43, Fedora 44, and Arch Linux.
-- Each image contains: Valve ARM64 Steam client (public beta), FEX Arch rootfs, desktop launcher, and game performance tuned env vars.
+          This release covers **Chinese** builds in Qualcomm Adreno and MediaTek variants:
+          - Distributions: Debian 13, Ubuntu 26.04, Fedora 43, Fedora 44, and Arch Linux.
+          - Each image contains: Valve ARM64 Steam client (public beta), FEX Arch rootfs, desktop launcher, and game performance tuned env vars.
 
-Use `rootfs_zh.json` as the subscription manifest in Droidspaces RootFS management.
+          Use `rootfs_zh.json` as the subscription manifest in Droidspaces RootFS management.
 
-First launch: Steam bootstraps, then on first Windows game it downloads Steam Linux Runtime 4.0 + Proton (5-10 min).
-EOF
+          First launch: Steam bootstraps, then on first Windows game it downloads Steam Linux Runtime 4.0 + Proton (5-10 min).
+          EOF
           {
             printf '\n## Build information\n\n'
             printf '%s\n' \
