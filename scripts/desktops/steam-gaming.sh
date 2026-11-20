@@ -51,8 +51,9 @@ configure_environment() {
 }
 
 # ---------- package install per distro ----------
-# Game-grade deps required by Steam ARM64 client + Proton + FEX.
-# squashfs-tools provides unsquashfs used to unpack the FEX Arch rootfs.
+# Core deps for Steam ARM64 client + FEX unpack (unsquashfs) + Wayland session.
+# Game libraries (libvpx/libibus/X11 etc.) are provided by Steam Runtime / Proton,
+# so we intentionally keep this list minimal to avoid distro package-name drift.
 
 install_apt() {
     case "$ID:$VERSION_ID" in
@@ -61,26 +62,16 @@ install_apt() {
                 dbus-x11 dbus-user-session xdg-user-dirs curl unzip python3 \
                 squashfs-tools \
                 pipewire pipewire-alsa pipewire-pulse wireplumber \
-                vulkan-tools mesa-utils wayland-utils \
-                libva2 libibus-1.0-0 libvpx7 libvpx-dev \
-                libxcomposite1 libxcursor1 libxrandr2 libxi6 libx11-xcb1 \
-                libxcb-dri3-0 libxcb-present0 libxcb-sync1 \
-                libgl1 libglvnd0 libvulkan1 \
-                fonts-noto-cjk fonts-noto-color-emoji fonts-noto-core \
-                bash-completion ca-certificates
+                fonts-noto-cjk fonts-noto-color-emoji \
+                ca-certificates bash-completion
             ;;
         ubuntu:26.04)
             apt-get install -y --no-install-recommends \
                 dbus-x11 dbus-user-session xdg-user-dirs curl unzip python3 \
                 squashfs-tools \
                 pipewire pipewire-alsa pipewire-pulse wireplumber \
-                vulkan-tools mesa-utils wayland-utils \
-                libva2 libibus-1.0-0 libvpx7 libvpx-dev \
-                libxcomposite1 libxcursor1 libxrandr2 libxi6 libx11-xcb1 \
-                libxcb-dri3-0 libxcb-present0 libxcb-sync1 \
-                libgl1 libglvnd0 libvulkan1 \
-                fonts-noto-cjk fonts-noto-color-emoji fonts-noto-core \
-                bash-completion ca-certificates language-pack-zh-hans
+                fonts-noto-cjk fonts-noto-color-emoji \
+                ca-certificates bash-completion language-pack-zh-hans
             ;;
         *)
             echo "Steam Gaming apt unsupported: $ID $VERSION_ID" >&2
@@ -96,27 +87,17 @@ install_fedora() {
         dbus-x11 dbus-user-session xdg-user-dirs curl unzip python3 \
         squashfs-tools \
         pipewire pipewire-alsa pipewire-pulseaudio wireplumber \
-        vulkan-tools mesa-utils wayland-utils \
-        libva libibus libvpx-devel libvpx7 \
-        libXcomposite libXcursor libXrandr libXi libX11-xcb \
-        libxcb-dri3 libxcb-present libxcb-sync \
-        mesa-libGL libglvnd libvulkan \
-        google-noto-cjk-fonts google-noto-emoji-color-fonts google-noto-sans-fonts \
-        bash-completion ca-certificates
+        google-noto-cjk-fonts google-noto-emoji-color-fonts \
+        ca-certificates bash-completion glibc-langpack-zh
 }
 
 install_arch() {
     pacman -S --noconfirm --needed \
-        dbus-x11 dbus-user-session xdg-user-dirs curl unzip python3 \
+        xdg-user-dirs curl unzip python3 \
         squashfs-tools \
         pipewire pipewire-alsa pipewire-pulse wireplumber \
-        vulkan-tools mesa-utils wayland-utils \
-        libva libibus libvpx libvpx12 \
-        libxcomposite libxcursor libxrandr libxi libx11-xcb \
-        libxcb-dri3 libxcb-present libxcb-sync \
-        mesa libglvnd vulkan-icd-loader vulkan-freedreno \
-        noto-fonts-cjk noto-fonts-emoji noto-fonts \
-        bash-completion ca-certificates
+        noto-fonts-cjk noto-fonts-emoji \
+        ca-certificates bash-completion
 }
 
 install_profile() {
