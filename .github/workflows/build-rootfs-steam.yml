@@ -59,7 +59,7 @@ jobs:
 
   build-zh-qualcomm:
     name: Build zh / Qualcomm Adreno
-    if: inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'qualcomm'
+
     needs: prepare
     uses: ./.github/workflows/build-rootfs-core.yml
     with:
@@ -89,7 +89,7 @@ jobs:
 
   build-zh-mediatek:
     name: Build zh / MediaTek Mali
-    if: inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'mediatek'
+
     needs: prepare
     uses: ./.github/workflows/build-rootfs-core.yml
     with:
