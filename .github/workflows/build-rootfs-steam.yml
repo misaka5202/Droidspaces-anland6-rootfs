@@ -78,7 +78,7 @@ jobs:
       enable_kfgj: false
       enable_zip: true
       enable_docker: false
-      wayland_package_repository: ${{ env.WAYLAND_PACKAGE_REPOSITORY }}
+      wayland_package_repository: Goldzxcbug/droidspaces-package
       build_id: ${{ needs.prepare.outputs.build_id }}
       asset_variant: zh
       publish_release: false
@@ -108,7 +108,7 @@ jobs:
       enable_kfgj: false
       enable_zip: true
       enable_docker: false
-      wayland_package_repository: ${{ env.WAYLAND_PACKAGE_REPOSITORY }}
+      wayland_package_repository: Goldzxcbug/droidspaces-package
       build_id: ${{ needs.prepare.outputs.build_id }}
       asset_variant: zh
       publish_release: false
