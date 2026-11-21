@@ -112,9 +112,24 @@ install_profile() {
     # Steam ARM64 client + FEX + desktop launcher
     # install-steam may fail on network; keep building regardless so the rootfs
     # image is still produced (Steam/FEX can self-download on first game launch).
+    # When it does succeed, the launcher it writes is what makes the client start
+    # at all, so a missing or unparsable one must fail here instead of shipping.
     if command -v install-steam >/dev/null 2>&1; then
         echo "--> Assembling Steam ARM64 client + FEX"
-        install-steam --channel publicbeta || echo "!! install-steam failed (build continues)" >&2
+        if install-steam --channel publicbeta; then
+            _launcher=/usr/local/bin/steam-anland
+            if [ ! -x "$_launcher" ]; then
+                echo "!! $_launcher missing or not executable" >&2
+                return 1
+            fi
+            if ! sh -n "$_launcher"; then
+                echo "!! $_launcher failed a POSIX syntax check" >&2
+                return 1
+            fi
+            echo "--> steam-anland launcher verified"
+        else
+            echo "!! install-steam failed (build continues)" >&2
+        fi
     else
         echo "!! install-steam not found" >&2
     fi

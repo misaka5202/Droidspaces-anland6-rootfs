@@ -14,6 +14,16 @@
 #   STEAM_CHANNEL        stable | publicbeta (default: publicbeta)
 #   FEX_ROOTFS_URL       URL to FEX Arch rootfs tarball (default: latest GitHub release)
 #   STEAM_USER           User that owns Steam files (default: auto-detected)
+#
+# Notes:
+#   - The client is started through /usr/local/bin/steam-anland instead of the
+#     client binary, because two environment fixes are required on hardware: one
+#     process-wide libpng (steamui.so exports its own png_* symbols while libSDL3
+#     carries a hidden copy, and lazy binding across the two kills the client at
+#     startup) and a GL fallback to llvmpipe when no KMS node is present.
+#   - Do not pass -gamepadui. This ARM64 channel ships the desktop UI only: the
+#     update manifest carries tenfoot_images_all (images, no web assets) and no
+#     deckui package, so the flag loads an empty data:text/html page.
 
 set -euo pipefail
 
@@ -61,6 +71,12 @@ GUESTOS_DIR="${ROOTFS_DIR:-}/usr/share/guestos/fex-mesa"
 DOT_STEAM_DIR="${ROOTFS_DIR:-}/home/${STEAM_USER}/.steam"
 ICONS_DIR="${ROOTFS_DIR:-}/usr/local/share/icons/hicolor/scalable/apps"
 DESKTOP_FILE="${ROOTFS_DIR:-}/home/${STEAM_USER}/.local/share/applications/steam.desktop"
+BIN_DIR="${ROOTFS_DIR:-}/usr/local/bin"
+STEAM_LAUNCHER="${BIN_DIR}/steam-anland"
+STEAM_SETTINGS_HELPER="${BIN_DIR}/steam-open-settings"
+# Path as the client sees it from inside the container: the launcher is written
+# into the image, where ROOTFS_DIR is not part of the path.
+STEAM_ROOT_RUNTIME="/home/${STEAM_USER}/.local/share/Steam"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -269,6 +285,87 @@ log "==> Step 6: Desktop launcher + icon"
 
 mkdir -p "${ROOTFS_DIR:-}/home/${STEAM_USER}/.local/share/applications"
 mkdir -p "$ICONS_DIR"
+mkdir -p "$BIN_DIR"
+
+# Runtime launcher.  The desktop entry used to exec the client binary directly,
+# which loses two environment fixes that are required on real hardware:
+#
+#   1. libpng.  steamui.so statically links libpng and exports 391 png_* symbols
+#      while libSDL3 carries its own hidden copy.  png_* binds lazily, so a
+#      png_struct allocated by one implementation gets dereferenced by the other
+#      and the client dies with SIGSEGV before the UI appears.  Preloading the
+#      system libpng keeps one implementation for the whole process tree.
+#   2. OpenGL.  The session environment selects the vendor path (kgsl on
+#      Qualcomm, libhybris/Mali on MediaTek).  With no KMS node the client cannot
+#      create a GBM device and eglInitialize fails, so fall back to llvmpipe
+#      rather than aborting.  A DRM render node alone is not enough: it serves
+#      Vulkan but still leaves GL without a GBM device.
+cat > "$STEAM_LAUNCHER" <<'STEAM_LAUNCHER_EOF'
+#!/bin/sh
+# steam-anland - Steam ARM64 launcher for Droidspaces + anland containers.
+#
+# Preload a single libpng implementation.  Skipped when the library is absent so
+# a rootfs without libpng16 still starts the client.
+set -u
+
+S="@STEAM_ROOT@"
+
+PNG="$(ldconfig -p 2>/dev/null | awk '/libpng16\.so\.16/ {print $NF; exit}')"
+if [ -n "${PNG:-}" ] && [ -e "$PNG" ]; then
+    LD_PRELOAD="$PNG"
+    export LD_PRELOAD
+fi
+
+LD_LIBRARY_PATH="$S/steamrtarm64:$S/steamrtarm64/libs:$S/linuxarm64:$S/androidarm64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH
+export STEAM_COMPAT_CLIENT_INSTALL_PATH="$S"
+
+if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "${XDG_RUNTIME_DIR:-/nonexistent}" ]; then
+    if [ -d "/run/user/$(id -u)" ]; then
+        XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    elif [ -d /run/anland ]; then
+        XDG_RUNTIME_DIR=/run/anland
+    fi
+    if [ -n "${XDG_RUNTIME_DIR:-}" ]; then export XDG_RUNTIME_DIR; fi
+fi
+
+# Only a KMS node proves that GL can create a GBM device.  A kgsl/mali 3D node
+# or a DRM render node is not sufficient: with those present but no card node,
+# eglInitialize still fails and the client aborts on startup.  Vulkan keeps using
+# the vendor ICD, so Proton titles stay hardware accelerated either way.
+if [ -z "${STEAM_GL_MODE:-}" ]; then
+    _gpu=0
+    for _d in /dev/dri/card0 /dev/dri/card1 /dev/dri/card2; do
+        if [ -e "$_d" ]; then _gpu=1; break; fi
+    done
+    if [ "$_gpu" -eq 0 ]; then
+        GALLIUM_DRIVER=llvmpipe
+        LIBGL_ALWAYS_SOFTWARE=1
+        export GALLIUM_DRIVER LIBGL_ALWAYS_SOFTWARE
+    fi
+    unset _gpu _d
+fi
+
+cd "$S/steamrtarm64" 2>/dev/null || exit 1
+exec ./steam -no-cef-sandbox -cef-disable-gpu -chromeosnopreallocate "$@"
+STEAM_LAUNCHER_EOF
+
+sed -i "s|@STEAM_ROOT@|${STEAM_ROOT_RUNTIME}|g" "$STEAM_LAUNCHER"
+chmod 755 "$STEAM_LAUNCHER"
+log "    launcher: ${STEAM_LAUNCHER}"
+
+# Settings is reachable without the client menu: anland-miniwm implements no
+# EWMH, so CEF dropdowns and modal dialogs are mapped at +0+0 under the main
+# window and never raised, which makes the Steam menu look unresponsive.
+cat > "$STEAM_SETTINGS_HELPER" <<'STEAM_SETTINGS_EOF'
+#!/bin/sh
+# Open Steam Settings through the URL handler instead of the in-client menu.
+exec /usr/local/bin/steam-anland "steam://open/settings" "$@"
+STEAM_SETTINGS_EOF
+
+chmod 755 "$STEAM_SETTINGS_HELPER"
+log "    settings helper: ${STEAM_SETTINGS_HELPER}"
+
 
 # Icon (Steam logo SVG from Wikimedia)
 download "https://upload.wikimedia.org/wikipedia/commons/8/83/Steam_icon_logo.svg" \
@@ -285,7 +382,7 @@ Type=Application
 Name=Steam
 GenericName=Steam Gaming
 Comment=Play Steam games via Valve ARM64 client + Proton
-Exec=${STEAM_ROOT}/steamrtarm64/steam %U
+Exec=/usr/local/bin/steam-anland %U
 Icon=steam
 Terminal=false
 Categories=Game;

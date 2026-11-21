@@ -18,6 +18,9 @@
 | `tui/install-mesa.sh` | ARM64 Linux 容器 | 安装最新版 Android 容器专用 Mesa 和 MediaCodec VA-API 驱动，并锁定 Mesa 包。 |
 | `tui/install-hangover-wine.sh` | ARM64 Linux 容器 | 安装当前发行版对应的 Hangover Wine Release 包。 |
 | `tui/install-winefonts.sh` | Linux 容器 | 安装 Wine 字体包并刷新 fontconfig 字体缓存。 |
+| `tui/install-steam.sh` | RootFS 构建环境 | 组装 Valve ARM64 Steam 客户端并写入启动器与设置入口。 |
+| `steam-anland`（由 `tui/install-steam.sh` 生成） | Linux 容器 | Steam 启动包装器：统一 libpng 预加载，缺少 KMS 节点时回退 llvmpipe。 |
+| `steam-open-settings`（由 `tui/install-steam.sh` 生成） | Linux 容器 | 经 URL handler 打开 Steam 设置，绕开未实现 EWMH 的窗口管理器。 |
 | `tui/install-anland-kde.sh` | ARM64 Linux 容器 | 安装 Anland patched KWin/Xwayland Release 包，并锁定相关包。 |
 | `tui/install-anland-gnome.sh` | ARM64 Debian/Ubuntu/Fedora/Arch 容器 | 安装 Anland patched Mutter Release 包，并锁定相关包。 |
 | `tui/install-anland-next.sh` | ARM64 Debian/Ubuntu/Fedora/Arch 容器 | 安装 Anland Next session 包（mini-wm + patched Xwayland + patched bubblewrap）。 |
