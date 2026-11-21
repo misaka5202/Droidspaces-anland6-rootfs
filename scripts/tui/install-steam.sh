@@ -308,7 +308,22 @@ cat > "$STEAM_LAUNCHER" <<'STEAM_LAUNCHER_EOF'
 # a rootfs without libpng16 still starts the client.
 set -u
 
-S="@STEAM_ROOT@"
+# The installation step runs before the desktop account exists, so the tree can
+# end up under /home/user while the session runs as another user.  Resolve it at
+# runtime instead of trusting the baked-in path.
+S=""
+for _c in "@STEAM_ROOT@" "${HOME:-}/.local/share/Steam" \
+          /home/Gold/.local/share/Steam /home/user/.local/share/Steam; do
+    if [ -n "$_c" ] && [ -x "$_c/steamrtarm64/steam" ]; then
+        S="$_c"
+        break
+    fi
+done
+if [ -z "$S" ]; then
+    echo "steam-anland: no Steam install found (looked in @STEAM_ROOT@, $HOME and the image defaults)" >&2
+    exit 1
+fi
+unset _c
 
 PNG="$(ldconfig -p 2>/dev/null | awk '/libpng16\.so\.16/ {print $NF; exit}')"
 if [ -n "${PNG:-}" ] && [ -e "$PNG" ]; then
