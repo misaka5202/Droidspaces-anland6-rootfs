@@ -319,6 +319,31 @@ for dp, _, fs in os.walk(root):
 print(f"    fixed {fixed} non-executable ELF binaries")
 PY
 
+# ---------- 8. Ownership ----------
+# The client refuses to run unless it can write its own tree: the pre-launch
+# update writes package/ and aborts with
+#     Fatal error: Directory <Steam>/package not writable.
+# when the tree belongs to root.  Everything above is created by this script as
+# root (the in-container run, and a root-owned --prefix run), while the desktop
+# session runs as STEAM_USER, so hand the tree over.  A --prefix rootfs usually
+# has no such account on the host, and these images put the desktop user at
+# uid 1000, so fall back to that pair.
+log "==> Step 8: Ownership -> ${STEAM_USER}"
+if [[ "$(id -u)" -eq 0 ]]; then
+    OWNER_UID="$(id -u "$STEAM_USER" 2>/dev/null || echo 1000)"
+    OWNER_GID="$(id -g "$STEAM_USER" 2>/dev/null || echo 1000)"
+    for p in "$STEAM_ROOT" "$DOT_STEAM_DIR" \
+             "${ROOTFS_DIR:-}/home/${STEAM_USER}/.local/share/applications" \
+             "$ICONS_DIR"; do
+        if [[ -e "$p" ]]; then
+            chown -R "${OWNER_UID}:${OWNER_GID}" "$p"
+        fi
+    done
+    log "    chown -R ${OWNER_UID}:${OWNER_GID} (Steam, .steam, desktop entry, icon)"
+else
+    log "    not running as root; ownership left as $(id -un)"
+fi
+
 log "==> Done. Steam ARM64 client v${VER} installed to ${STEAM_ROOT}"
 log "    First launch runs 'steam -deckard -exitsteam' once to bootstrap."
 log "    Windows games will prompt Steam to download Steam Linux Runtime 4.0 for arm64 + Proton on first launch."
