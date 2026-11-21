@@ -27,6 +27,21 @@ ARG ANLAND6_XWAYLAND=0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# APT mirror. The debian:trixie base image points at http://deb.debian.org,
+# which is not reachable from every network the image is used on (on a mainland
+# China connection it times out, so every apt step fails). Rewrite the URIs to a
+# mirror that is, and pass --build-arg APT_MIRROR=http://deb.debian.org/debian
+# to opt back out.
+ARG APT_MIRROR=http://mirrors.aliyun.com/debian
+
+RUN if [ -n "${APT_MIRROR}" ]; then \
+        for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do \
+            if [ -f "$f" ]; then \
+                sed -i "s|http://deb.debian.org/debian|${APT_MIRROR}|g" "$f"; \
+            fi; \
+        done; \
+    fi
+
 # 启用 APT 并行连接、HTTP(S) pipeline 和下载重试
 RUN printf '%s\n' \
     'Acquire::Queue-Mode "host";' \
