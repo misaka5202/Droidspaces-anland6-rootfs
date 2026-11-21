@@ -13,7 +13,7 @@
 #   ROOTFS_DIR           Prefix for all file writes (default: empty = host system)
 #   STEAM_CHANNEL        stable | publicbeta (default: publicbeta)
 #   FEX_ROOTFS_URL       URL to FEX Arch rootfs tarball (default: latest GitHub release)
-#   STEAM_USER           User that owns Steam files (default: user)
+#   STEAM_USER           User that owns Steam files (default: auto-detected)
 
 set -euo pipefail
 
@@ -23,7 +23,19 @@ readonly DEPOT_URL="https://client-update.steamstatic.com"
 # ---------- argument parsing ----------
 ROOTFS_DIR="${ROOTFS_DIR:-}"
 STEAM_CHANNEL="${STEAM_CHANNEL:-publicbeta}"
-STEAM_USER="${STEAM_USER:-user}"
+# The rootfs ships a single non-root account; the anland 6.x images call it
+# "Gold" (uid 1000), but the upstream recipe assumed "user".  Resolve the
+# real account so the desktop entry and the app menu land in the home
+# directory the session actually uses.
+if [[ -z "${STEAM_USER:-}" ]]; then
+    if [[ -n "${SUDO_USER:-}" ]] && [[ -d "/home/${SUDO_USER}" ]]; then
+        STEAM_USER="$SUDO_USER"
+    elif id -u 1000 >/dev/null 2>&1 && getent passwd 1000 >/dev/null 2>&1; then
+        STEAM_USER="$(getent passwd 1000 | cut -d: -f1)"
+    else
+        STEAM_USER="user"
+    fi
+fi
 FEX_ROOTFS_URL="${FEX_ROOTFS_URL:-}"
 
 while [[ $# -gt 0 ]]; do
@@ -57,8 +69,22 @@ log() { printf '[install-steam] %s\n' "$*"; }
 die() { printf '[install-steam] ERROR: %s\n' "$*" >&2; exit 1; }
 
 download() {
-    local url="$1" output="$2"
-    curl -fsSL --retry 3 --connect-timeout 30 -o "$output" "$url"
+    # Resumable download with retries.  The Valve CDN drops long-lived TLS
+    # connections mid-transfer, so a single curl invocation cannot be trusted
+    # for the multi-hundred-MB client depot: resume (-C -) from what already
+    # landed and retry until the file is complete.
+    local url="$1" output="$2" attempt=1 max_attempts="${DOWNLOAD_MAX_ATTEMPTS:-12}"
+    while [ "$attempt" -le "$max_attempts" ]; do
+        if curl -fsSL --connect-timeout 30 --max-time 900 \
+                --speed-limit 1024 --speed-time 60 \
+                -C - -o "$output" "$url"; then
+            return 0
+        fi
+        log "    download interrupted (attempt ${attempt}/${max_attempts}), resuming: $(basename "$output")"
+        sleep $(( attempt < 4 ? attempt * 3 : 10 ))
+        attempt=$(( attempt + 1 ))
+    done
+    return 1
 }
 
 # ---------- 1. Download Valve ARM64 manifest + assemble client ----------
@@ -85,6 +111,7 @@ awk '
 COMP_COUNT="$(wc -l < "$TMP_DIR/comps.txt" | tr -d ' ')"
 log "    components to fetch: ${COMP_COUNT}"
 
+FAILED_COMPONENTS=()
 mkdir -p "$TMP_DIR/depot"
 i=0
 while read -r file sha; do
@@ -92,10 +119,24 @@ while read -r file sha; do
     out="$TMP_DIR/depot/$file"
     if [[ ! -f "$out" ]] || [[ "$(sha256sum < "$out" | cut -d' ' -f1)" != "$sha" ]]; then
         log "    [${i}/${COMP_COUNT}] get ${file}"
-        download "${BASE_URL}/${file}" "$out"
+        if ! download "${BASE_URL}/${file}" "$out"; then
+            log "    WARNING: could not fetch ${file} after retries"
+            FAILED_COMPONENTS+=("$file")
+            continue
+        fi
     fi
-    [[ "$(sha256sum < "$out" | cut -d' ' -f1)" == "$sha" ]] || die "SHA mismatch: $file"
+    if [[ "$(sha256sum < "$out" | cut -d' ' -f1)" != "$sha" ]]; then
+        log "    WARNING: SHA mismatch for ${file}"
+        FAILED_COMPONENTS+=("$file")
+        continue
+    fi
 done < "$TMP_DIR/comps.txt"
+
+if [ "${#FAILED_COMPONENTS[@]}" -gt 0 ]; then
+    log "==> WARNING: ${#FAILED_COMPONENTS[@]} component(s) could not be fetched:"
+    for c in "${FAILED_COMPONENTS[@]}"; do log "    - $c"; done
+    die "client depot incomplete - rerun install-steam to resume the missing parts"
+fi
 
 # Extract: fix Windows '\\' path separator, chmod +x all ELF (depot zips carry no unix bits)
 log "==> Step 2: Extracting depot zips to ${STEAM_ROOT}"
@@ -181,10 +222,13 @@ mkdir -p "$FEX_DIR"
 if [[ "$FEX_ROOTFS_URL" == *.sqsh ]]; then
     if command -v unsquashfs >/dev/null 2>&1; then
         log "    unsquashfs: extracting $FEX_ROOTFS_URL -> $FEX_DIR"
-        download "$FEX_ROOTFS_URL" "$TMP_DIR/fex-rootfs.sqsh"
-        # unsquashfs creates FEX_DIR itself; use -f to overwrite stale contents
-        if ! unsquashfs -f -d "$FEX_DIR" "$TMP_DIR/fex-rootfs.sqsh"; then
-            log "    unsquashfs failed; Steam will download the rootfs on first game launch"
+        if download "$FEX_ROOTFS_URL" "$TMP_DIR/fex-rootfs.sqsh"; then
+            # unsquashfs creates FEX_DIR itself; use -f to overwrite stale contents
+            if ! unsquashfs -f -d "$FEX_DIR" "$TMP_DIR/fex-rootfs.sqsh"; then
+                log "    unsquashfs failed; Steam will download the rootfs on first game launch"
+            fi
+        else
+            log "    FEX rootfs download failed; Steam will download it on first game launch"
         fi
     else
         log "    unsquashfs not installed; skipping FEX rootfs (Steam will download on first game launch)"
@@ -194,8 +238,9 @@ elif [[ "$FEX_ROOTFS_URL" == *.ero ]]; then
     log "    EroFS rootfs not supported in-container; Steam will download on first game launch"
 # Legacy tar.gz (FEXRootFSFetcher)
 else
-    download "$FEX_ROOTFS_URL" "$TMP_DIR/fex-rootfs.tar.gz"
-    if tar -tzf "$TMP_DIR/fex-rootfs.tar.gz" >/dev/null 2>&1; then
+    if ! download "$FEX_ROOTFS_URL" "$TMP_DIR/fex-rootfs.tar.gz"; then
+        log "    FEX rootfs download failed; Steam will download it on first game launch"
+    elif tar -tzf "$TMP_DIR/fex-rootfs.tar.gz" >/dev/null 2>&1; then
         tar -xzf "$TMP_DIR/fex-rootfs.tar.gz" -C "$TMP_DIR/fex-extract" 2>/dev/null || true
         if [[ -d "$TMP_DIR/fex-extract/ArchLinux" ]]; then
             cp -a "$TMP_DIR/fex-extract/ArchLinux/"* "$FEX_DIR/" 2>/dev/null || cp -a "$TMP_DIR/fex-extract/ArchLinux" "$FEX_DIR/"
