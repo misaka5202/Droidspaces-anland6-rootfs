@@ -61,16 +61,18 @@ RUN if [ "$DISPLAY_BACKEND" = "anland-wayland" ]; then \
 
 # anland 音频桥接：容器 PipeWire 直连主机 PulseAudio（原生 PipeWire 客户端）
 COPY scripts/etc/pipewire/pipewire.conf.d/anland-pulse-tunnel.conf /tmp/anland-pulse-tunnel.conf
+COPY scripts/etc/pipewire/pipewire.conf /tmp/anland-pipewire.conf
 COPY scripts/etc/systemd/user/anland-audio-watch.service /tmp/anland-audio-watch.service
 COPY scripts/anland-audio-watch /tmp/anland-audio-watch
 RUN if [ "$DISPLAY_BACKEND" = "anland-wayland" ]; then \
         install -D -m 0644 /tmp/anland-pulse-tunnel.conf /etc/pipewire/pipewire.conf.d/anland-pulse-tunnel.conf; \
+        install -D -m 0644 /tmp/anland-pipewire.conf /etc/pipewire/pipewire.conf; \
         install -D -m 0755 /tmp/anland-audio-watch /usr/local/lib/anland/anland-audio-watch; \
         install -D -m 0644 /tmp/anland-audio-watch.service /usr/lib/systemd/user/anland-audio-watch.service; \
         install -d -m 0755 /etc/systemd/user/default.target.wants; \
         ln -sfn /usr/lib/systemd/user/anland-audio-watch.service /etc/systemd/user/default.target.wants/anland-audio-watch.service; \
     fi && \
-    rm -f /tmp/anland-pulse-tunnel.conf /tmp/anland-audio-watch /tmp/anland-audio-watch.service
+    rm -f /tmp/anland-pulse-tunnel.conf /tmp/anland-pipewire.conf /tmp/anland-audio-watch /tmp/anland-audio-watch.service
 
 # Fedora 容器基础镜像默认只解包 en_US 翻译文件，桌面的 zh_CN 翻译会在
 # RPM 安装时被过滤；全局放开全部语言，供所有桌面共用。
