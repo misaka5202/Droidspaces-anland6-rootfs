@@ -399,11 +399,22 @@ if [ -z "$S" ]; then
 fi
 unset _c
 
-PNG="$(ldconfig -p 2>/dev/null | awk '/libpng16\.so\.16/ {print $NF; exit}')"
+# Prefer the runtime copy: the client and libSDL3_image are built against the
+# libpng shipped in pv-runtime, so preloading that exact build cannot drift.
+# Fall back to the host library when a rootfs has no runtime (or Steam pruned
+# it); either copy works as long as only one is loaded in the process tree.
+PNG=""
+for _r in "$S"/steamrtarm64/pv-runtime/steam-runtime-steamrt/*/files/lib/*-linux-gnu/libpng16.so.16.*; do
+    if [ -e "$_r" ]; then PNG="$_r"; fi
+done
+if [ -z "$PNG" ]; then
+    PNG="$(ldconfig -p 2>/dev/null | awk '/libpng16\.so\.16/ {print $NF; exit}')"
+fi
 if [ -n "${PNG:-}" ] && [ -e "$PNG" ]; then
     LD_PRELOAD="$PNG"
     export LD_PRELOAD
 fi
+unset _r
 
 LD_LIBRARY_PATH="$S/steamrtarm64:$S/steamrtarm64/libs:$S/linuxarm64:$S/androidarm64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export LD_LIBRARY_PATH
