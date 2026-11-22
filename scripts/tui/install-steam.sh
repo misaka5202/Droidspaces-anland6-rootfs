@@ -621,6 +621,64 @@ else
     log "    not running as root; ownership left as $(id -un)"
 fi
 
+# ---------- 9. Autostart ----------
+# anland 6 ships no desktop shell, no session autostart hook and nothing that
+# reads XDG .desktop files, so the only way a shipped rootfs can put Steam on
+# screen without a shell is a boot unit of its own.  It waits for the session's
+# X socket instead of racing it: desktop-session.service owns Xwayland and a
+# llvmpipe start takes seconds.  STEAM_AUTOSTART=0 keeps an image idle on boot.
+if [[ "${STEAM_AUTOSTART:-1}" == 1 ]]; then
+    log "==> Step 9: Autostart unit"
+    R="${ROOTFS_DIR:-}"
+    mkdir -p "${R}/usr/local/bin" "${R}/etc/systemd/system/multi-user.target.wants"
+    cat > "${R}/usr/local/bin/steam-autostart" <<'STEAM_AUTOSTART_EOF'
+#!/bin/sh
+# Wait for the anland X server, then launch Steam as the session user.
+set -u
+USER_NAME="${STEAM_USER:-Gold}"
+UID_N="$(id -u "$USER_NAME" 2>/dev/null || echo 1000)"
+HOME_DIR="$(getent passwd "$UID_N" | cut -d: -f6)"
+[ -n "$HOME_DIR" ] || HOME_DIR="/home/$USER_NAME"
+i=0
+while [ "$i" -lt 120 ]; do
+    i=$((i+1))
+    [ -S /tmp/.X11-unix/X0 ] && break
+    sleep 1
+done
+[ -S /tmp/.X11-unix/X0 ] || { echo "steam-autostart: no X socket after ${i}s" >&2; exit 0; }
+sleep 4
+LAUNCHER="$HOME_DIR/.local/bin/steam-anland"
+[ -x "$LAUNCHER" ] || LAUNCHER=/usr/local/bin/steam-anland
+exec setpriv --reuid="$UID_N" --regid="$UID_N" --init-groups env -i \
+    HOME="$HOME_DIR" USER="$USER_NAME" LOGNAME="$USER_NAME" \
+    PATH="$HOME_DIR/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    DISPLAY=:0 WAYLAND_DISPLAY=wayland-anland \
+    XDG_RUNTIME_DIR="/run/user/$UID_N" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_N/bus" \
+    PULSE_SERVER=unix:/run/anland/pulse.sock LANG=en_US.UTF-8 \
+    MESA_LOADER_DRIVER_OVERRIDE=swrast GALLIUM_DRIVER=llvmpipe LIBGL_ALWAYS_SOFTWARE=1 \
+    "$LAUNCHER"
+STEAM_AUTOSTART_EOF
+    cat > "${R}/etc/systemd/system/steam-autostart.service" <<'STEAM_UNIT_EOF'
+[Unit]
+Description=Launch Steam on the anland desktop session
+After=desktop-session.service
+Requires=desktop-session.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/steam-autostart
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
+STEAM_UNIT_EOF
+    chmod 755 "${R}/usr/local/bin/steam-autostart"
+    chmod 644 "${R}/etc/systemd/system/steam-autostart.service"
+    ln -sf /etc/systemd/system/steam-autostart.service \
+        "${R}/etc/systemd/system/multi-user.target.wants/steam-autostart.service"
+    log "    steam-autostart.service enabled (STEAM_AUTOSTART=0 disables)"
+fi
+
 log "==> Done. Steam ARM64 client v${VER} installed to ${STEAM_ROOT}"
 log "    First launch runs 'steam -deckard -exitsteam' once to bootstrap."
 log "    Windows games will prompt Steam to download Steam Linux Runtime 4.0 for arm64 + Proton on first launch."
