@@ -80,7 +80,7 @@ on:
         description: 'The anland 6.x release tag'
         required: false
         type: string
-        default: '6.2-ds7'
+        default: 'v6.2.10'
       gpu_vendor:
         description: 'GPU vendor: qualcomm (Adreno hardware acceleration) or mediatek (libhybris + /dev/mali0, requires mali_nsfix)'
         required: false

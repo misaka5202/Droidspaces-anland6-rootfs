@@ -79,8 +79,8 @@ jobs:
       enable_zip: true
       enable_docker: false
       wayland_package_repository: Goldzxcbug/droidspaces-package
-      # Pin the anland tag explicitly: the inherited core default (6.2-ds7) was
-      # removed upstream, so every build failed with 404 on anlandx.tar.gz.
+      # Pin the tag here: the Steam rootfs is validated against this anland
+      # release, so it must not drift with the core workflow default.
       anland6_version: v6.2.10
       build_id: ${{ needs.prepare.outputs.build_id }}
       asset_variant: zh
@@ -112,8 +112,8 @@ jobs:
       enable_zip: true
       enable_docker: false
       wayland_package_repository: Goldzxcbug/droidspaces-package
-      # Pin the anland tag explicitly: the inherited core default (6.2-ds7) was
-      # removed upstream, so every build failed with 404 on anlandx.tar.gz.
+      # Pin the tag here: the Steam rootfs is validated against this anland
+      # release, so it must not drift with the core workflow default.
       anland6_version: v6.2.10
       build_id: ${{ needs.prepare.outputs.build_id }}
       asset_variant: zh
