@@ -22,7 +22,7 @@ Choose the target, desktop, display backend, and optional features on the GitHub
 | --- | --- |
 | `none` | Command-line environment for SSH, development, or a custom desktop. |
 | `KDE` | KDE Plasma; Arch supports Anland Wayland only, while other supported targets may use X11 or Anland Wayland. |
-| `KDE mobile` | Touch-first Plasma Mobile; requires Anland Wayland. |
+| `KDE mobile` | Touch-first KDE profile; requires Anland Wayland. Under anland 6.x it ships only the Kirigami mobile app set — no Plasma Mobile shell and no maliit keyboard (the session is anland-session, and the soft keyboard is the Android IME bridge's job); 5.x builds still install the full Plasma Mobile. |
 | `Mobile` | A distribution-agnostic touch-friendly app set (contacts, calendar, clocks, weather, maps, browser, terminal); requires Anland Wayland. No mobile shell such as Phosh or Lomiri is installed. |
 | `GNOME` | A full Anland Wayland desktop on Debian 13, Ubuntu 26, Fedora 43/44, and Arch Linux ARM, with a terminal, file manager, settings, system monitor, keyring, portal, and common document/media apps. |
 | `Anland Next` | An Anland session with rootless Xwayland and mini-wm, without a full desktop; Wayland only. |
