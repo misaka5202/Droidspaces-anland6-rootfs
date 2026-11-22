@@ -254,14 +254,26 @@ build_libhybris() {
         # autotools 三步的输出全部留档：失败时 RUN 会继续走到 configure-gpu 的
         # 软渲染回退，构建看起来仍然全绿——有日志才能事后追因。
         {
+            # AOSP 头文件带 clang 的 _Nonnull/_Nullable 注解，gcc 不认识；
+            # 定义成空宏让四系发行版的 gcc 都能编（与测试程序无关，核心库
+            # 引的同一批头）。
             ./autogen.sh
             ./configure --prefix=$HY_ROOT/inst --enable-arch=arm64 --enable-wayland --enable-lindroid-drm \
                 --enable-mali-quirks --enable-debug --enable-property-cache=no \
                 --with-android-headers=$HY_ROOT/android-headers \
-                --with-default-hybris-ld-library-path=/vendor/lib64/egl:/vendor/lib64:/system/lib64:/apex/$VNDK/lib64
-            make -j\"\$(nproc)\" CFLAGS='-O1 -g -DDEBUG' CXXFLAGS='-O1 -g -DDEBUG'
+                --with-default-hybris-ld-library-path=/vendor/lib64/egl:/vendor/lib64:/system/lib64:/apex/$VNDK/lib64 \
+                CFLAGS='-O1 -g -DDEBUG -D_Nonnull= -D_Nullable=' \
+                CXXFLAGS='-O1 -g -DDEBUG -D_Nonnull= -D_Nullable='
+            make -j\"\$(nproc)\"
             make -k install
         } > $HY_ROOT/build.log 2>&1 || true
+        # tests/ 子目录（test_hwcomposer 等）编不过时 install-recursive 会半途
+        # 中止——核心库可能已在/也可能不在 inst/lib。直接从构建树兜底拷一遍，
+        # 与 autotools 的 install 等价（.libs/ 就是最终产物；libEGL 在 egl/，
+        # libvulkan 在 vulkan/，platform so 由下面两个循环单独处理）。
+        for f in $HY_ROOT/dhy/hybris/*/.libs/lib*.so*; do
+            [ -e \"\$f\" ] && cp -f \"\$f\" $HY_ROOT/inst/lib/ 2>/dev/null || true
+        done
         for f in $HY_ROOT/dhy/hybris/egl/platforms/*/.libs/eglplatform_*.so; do
             [ -e \"\$f\" ] && cp -f \"\$f\" $HY_ROOT/inst/lib/
         done
