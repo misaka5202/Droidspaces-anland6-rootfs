@@ -117,6 +117,16 @@ preflight() {
         # 失败难发现得多。
         command -v gcc >/dev/null 2>&1 || warn "构建镜像暂无 gcc，将由 build_libhybris 安装"
         command -v make >/dev/null 2>&1 || warn "构建镜像暂无 make，将由 build_libhybris 安装"
+        # VNDK 必须在这里就给默认值：build_libhybris 的命令串是双引号
+        # heredoc，$VNDK 由本（外层）shell 展开，set -u 下未定义会在展开处
+        # 直接中止脚本——构建机上没有 /apex，探测永远走 else 分支。
+        VNDK="$(ls /apex 2>/dev/null | grep -o 'com\.android\.vndk\.v[0-9]*' | head -1 || true)"
+        if [ -n "$VNDK" ]; then
+            ok "VNDK: $VNDK"
+        else
+            warn "构建机无 VNDK apex，按 v34 假设"
+            VNDK="com.android.vndk.v34"
+        fi
         ok "build 模式（依赖由 build_libhybris 安装）"
         return 0
     fi
