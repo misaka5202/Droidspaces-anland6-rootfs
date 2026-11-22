@@ -572,6 +572,68 @@ SLR_EOF
     log "    SteamLinuxRuntime entry point -> passthrough"
 fi
 
+# ---------- 6c. On-screen keyboard ----------
+# anland 6 bridges text input with zwp_text_input_v1/v3 only: the Xwayland in
+# this image runs no XIM server and is not a text-input client, so an X11 app
+# such as Steam can never raise the Android keyboard.  anland-osk works around
+# that in X: an override-redirect band that mini-wm reparents into the focused
+# toplevel and that injects keys through XTEST.  It is a diagnostic/practical
+# fallback, not an IME, so it ships as a manual toggle and never autostarts.
+OSK_SRC="${ANLAND_OSK_SOURCE:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/anland-osk.c}"
+OSK_BIN="${ROOTFS_DIR:-}/usr/local/bin/anland-osk"
+if [[ -f "$OSK_SRC" ]]; then
+    log "==> Step 6c: On-screen keyboard"
+    osk_cc="${CC:-cc}"
+    if ! command -v "$osk_cc" >/dev/null 2>&1; then
+        if command -v apt-get >/dev/null 2>&1; then
+            log "    no C compiler; installing build dependencies"
+            apt-get update -qq >/dev/null 2>&1 || true
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                gcc libc6-dev libx11-dev libxtst-dev >/dev/null 2>&1 || true
+        fi
+    fi
+    if command -v "$osk_cc" >/dev/null 2>&1 &&
+       "$osk_cc" -O2 -o "$TMP_DIR/anland-osk" "$OSK_SRC" -lX11 -lXtst 2>"$TMP_DIR/osk.log"; then
+        install -D -m 755 "$TMP_DIR/anland-osk" "$OSK_BIN"
+        log "    anland-osk installed to /usr/local/bin/anland-osk"
+
+        cat > "${ROOTFS_DIR:-}/usr/local/bin/steam-osk" <<'STEAM_OSK_EOF'
+#!/bin/sh
+# Toggle the anland on-screen keyboard for the anland X session.
+# X11 clients get no Android IME on this stack; this band injects keys with
+# XTEST into whatever window holds the X input focus.
+set -u
+USER_NAME="${STEAM_USER:-Gold}"
+UID_N="$(id -u "$USER_NAME" 2>/dev/null || echo 1000)"
+HOME_DIR="$(getent passwd "$UID_N" | cut -d: -f6)"
+[ -n "$HOME_DIR" ] || HOME_DIR="/home/$USER_NAME"
+
+if pgrep -x anland-osk >/dev/null 2>&1; then
+    pkill -x anland-osk
+    echo "steam-osk: closed"
+    exit 0
+fi
+
+[ -S /tmp/.X11-unix/X0 ] || { echo "steam-osk: no X socket" >&2; exit 1; }
+
+# Detach: the band must outlive this shell and must not hold its stdout.
+setsid setpriv --reuid="$UID_N" --regid="$UID_N" --init-groups env -i \
+    HOME="$HOME_DIR" USER="$USER_NAME" LOGNAME="$USER_NAME" \
+    PATH="$HOME_DIR/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    DISPLAY=:0 WAYLAND_DISPLAY=wayland-anland XDG_RUNTIME_DIR="/run/user/$UID_N" \
+    /usr/local/bin/anland-osk >/dev/null 2>&1 < /dev/null &
+echo "steam-osk: opened"
+STEAM_OSK_EOF
+        chmod 755 "${ROOTFS_DIR:-}/usr/local/bin/steam-osk"
+        log "    toggle: /usr/local/bin/steam-osk"
+    else
+        log "    WARNING: anland-osk did not build; the keyboard stays unavailable"
+        sed -n '1,3p' "$TMP_DIR/osk.log" >&2 || true
+    fi
+else
+    log "==> Step 6c: On-screen keyboard skipped (no anland-osk.c next to this script)"
+fi
+
 # ---------- 7. Fix ELF + ensure all binaries executable ----------
 log "==> Step 7: Ensuring ELF binaries are executable"
 
