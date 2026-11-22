@@ -21,6 +21,8 @@
 | `tui/install-steam.sh` | RootFS 构建环境 | 组装 Valve ARM64 Steam 客户端并写入启动器与设置入口。 |
 | `steam-anland`（由 `tui/install-steam.sh` 生成） | Linux 容器 | Steam 启动包装器：统一 libpng 预加载，缺少 KMS 节点时回退 llvmpipe。 |
 | `steam-open-settings`（由 `tui/install-steam.sh` 生成） | Linux 容器 | 经 URL handler 打开 Steam 设置，绕开未实现 EWMH 的窗口管理器。 |
+| `tui/anland-osk.c` | RootFS 构建环境 | 屏幕键盘源码；由 `tui/install-steam.sh` 就地编译，供无法获得 Android 输入法的 X11 客户端使用。 |
+| `steam-osk`（由 `tui/install-steam.sh` 生成） | Linux 容器 | 开关上述屏幕键盘。 |
 | `tui/install-anland-kde.sh` | ARM64 Linux 容器 | 安装 Anland patched KWin/Xwayland Release 包，并锁定相关包。 |
 | `tui/install-anland-gnome.sh` | ARM64 Debian/Ubuntu/Fedora/Arch 容器 | 安装 Anland patched Mutter Release 包，并锁定相关包。 |
 | `tui/install-anland-next.sh` | ARM64 Debian/Ubuntu/Fedora/Arch 容器 | 安装 Anland Next session 包（mini-wm + patched Xwayland + patched bubblewrap）。 |

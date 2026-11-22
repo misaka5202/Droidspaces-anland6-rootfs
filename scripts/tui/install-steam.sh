@@ -579,20 +579,37 @@ fi
 # that in X: an override-redirect band that mini-wm reparents into the focused
 # toplevel and that injects keys through XTEST.  It is a diagnostic/practical
 # fallback, not an IME, so it ships as a manual toggle and never autostarts.
-OSK_SRC="${ANLAND_OSK_SOURCE:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/anland-osk.c}"
+# Images built by the Dockerfiles run this file as /usr/local/sbin/install-steam
+# (a single copied file), so the sibling next to it only exists in a checkout;
+# the Dockerfiles also drop the source at /usr/local/share/anland-osk.
+if [[ -n "${ANLAND_OSK_SOURCE:-}" ]]; then
+    OSK_SRC="$ANLAND_OSK_SOURCE"
+else
+    OSK_SRC=""
+    for osk_try in \
+        "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P)/anland-osk.c" \
+        /usr/local/share/anland-osk/anland-osk.c; do
+        [[ -f "$osk_try" ]] && { OSK_SRC="$osk_try"; break; }
+    done
+fi
 OSK_BIN="${ROOTFS_DIR:-}/usr/local/bin/anland-osk"
-if [[ -f "$OSK_SRC" ]]; then
+# Both Xlib and XTest headers are needed; a present compiler proves nothing.
+_osk_have_headers() {
+    printf '#include <X11/Xlib.h>\n#include <X11/extensions/XTest.h>\n' |
+        "$1" -E -x c - >/dev/null 2>&1
+}
+if [[ -n "$OSK_SRC" && -f "$OSK_SRC" ]]; then
     log "==> Step 6c: On-screen keyboard"
     osk_cc="${CC:-cc}"
-    if ! command -v "$osk_cc" >/dev/null 2>&1; then
+    if ! command -v "$osk_cc" >/dev/null 2>&1 || ! _osk_have_headers "$osk_cc"; then
         if command -v apt-get >/dev/null 2>&1; then
-            log "    no C compiler; installing build dependencies"
+            log "    installing C compiler and X11 development headers"
             apt-get update -qq >/dev/null 2>&1 || true
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                 gcc libc6-dev libx11-dev libxtst-dev >/dev/null 2>&1 || true
         fi
     fi
-    if command -v "$osk_cc" >/dev/null 2>&1 &&
+    if command -v "$osk_cc" >/dev/null 2>&1 && _osk_have_headers "$osk_cc" &&
        "$osk_cc" -O2 -o "$TMP_DIR/anland-osk" "$OSK_SRC" -lX11 -lXtst 2>"$TMP_DIR/osk.log"; then
         install -D -m 755 "$TMP_DIR/anland-osk" "$OSK_BIN"
         log "    anland-osk installed to /usr/local/bin/anland-osk"
@@ -631,7 +648,7 @@ STEAM_OSK_EOF
         sed -n '1,3p' "$TMP_DIR/osk.log" >&2 || true
     fi
 else
-    log "==> Step 6c: On-screen keyboard skipped (no anland-osk.c next to this script)"
+    log "==> Step 6c: On-screen keyboard skipped (anland-osk.c not found)"
 fi
 
 # ---------- 7. Fix ELF + ensure all binaries executable ----------

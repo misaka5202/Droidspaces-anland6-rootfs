@@ -61,6 +61,7 @@ COPY scripts/tui/configure-gpu.sh /usr/local/sbin/configure-gpu
 COPY scripts/tui/install-hangover-wine.sh /usr/local/sbin/install-hangover-wine
 COPY scripts/tui/install-winefonts.sh /usr/local/sbin/install-winefonts
 COPY scripts/tui/install-steam.sh /usr/local/sbin/install-steam
+COPY scripts/tui/anland-osk.c /usr/local/share/anland-osk/anland-osk.c
 COPY scripts/tui/droidspaces-tui.sh /usr/local/bin/droidspaces-tui
 COPY scripts/tui/droidspaces-gpu.sh /usr/local/bin/droidspaces-gpu
 COPY scripts/hybris/setup-mali-hybris.sh /usr/local/sbin/setup-mali-hybris
