@@ -45,7 +45,6 @@ COPY scripts/tui/configure-gpu.sh /usr/local/sbin/configure-gpu
 COPY scripts/tui/install-hangover-wine.sh /usr/local/sbin/install-hangover-wine
 COPY scripts/tui/install-winefonts.sh /usr/local/sbin/install-winefonts
 COPY scripts/tui/install-steam.sh /usr/local/sbin/install-steam
-COPY scripts/tui/anland-apps /usr/local/bin/anland-apps
 COPY scripts/tui/anland-osk.c /usr/local/share/anland-osk/anland-osk.c
 COPY scripts/tui/droidspaces-tui.sh /usr/local/bin/droidspaces-tui
 COPY scripts/tui/droidspaces-gpu.sh /usr/local/bin/droidspaces-gpu
@@ -79,7 +78,7 @@ RUN if [ "$DISPLAY_BACKEND" = "anland-wayland" ]; then \
     rm -f /tmp/anland-pulse-tunnel.conf /tmp/anland-pipewire.conf /tmp/anland-audio-watch /tmp/anland-audio-watch.service
 
 # 赋予相关脚本可执行权限
-RUN chmod +x /usr/local/bin/download-firmware /usr/local/sbin/nosnap /etc/profile.d/ds-aliases.sh /usr/local/sbin/install-anland-next /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-panvk /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/anland-apps /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
+RUN chmod +x /usr/local/bin/download-firmware /usr/local/sbin/nosnap /etc/profile.d/ds-aliases.sh /usr/local/sbin/install-anland-next /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-panvk /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
     ln -s droidspaces-tui /usr/local/bin/dstui && \
     ln -s droidspaces-tui /usr/local/bin/ds-tui
 

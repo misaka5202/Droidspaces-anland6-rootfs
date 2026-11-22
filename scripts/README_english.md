@@ -21,7 +21,6 @@ This directory contains installers used while building the RootFS, maintenance t
 | `steam-open-settings` (written by `tui/install-steam.sh`) | Linux container | Opens Steam Settings through the URL handler, avoiding window managers that implement no EWMH. |
 | `tui/anland-osk.c` | RootFS build environment | On-screen keyboard source; compiled in place by `tui/install-steam.sh` for X11 clients that can never reach the Android IME. |
 | `steam-osk` (written by `tui/install-steam.sh`) | Linux container | Toggles that on-screen keyboard. |
-| `tui/anland-apps` | Linux container | Enumerates and launches the `.desktop` applications inside the container (`list` / `run <id>`) for the Android app page and pinned shortcuts; ids are restricted to `[a-z0-9-]` and no arbitrary command execution is exposed. |
 | `tui/install-panvk.sh` | RootFS build environment | Downloads Mesa PanVK on kbase (mali-panvk) into `/usr/local/lib/vulkan/panvk/`; invoked only on the MTK variant. Loaded through libhybris's `LIBVULKAN` switch, it gives DXVK and Zink a real-GPU Vulkan. |
 | `tui/install-anland-next.sh` | ARM64 Debian/Ubuntu/Fedora/Arch container | Installs the Anland Next session package (mini-wm + patched Xwayland + patched bubblewrap). |
 | `lib/anland-build.sh` | RootFS build host | Resolves the Anland package family, Release tag, and revision for native/QEMU builds. |
