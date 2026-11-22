@@ -23,6 +23,7 @@
 | `steam-open-settings`（由 `tui/install-steam.sh` 生成） | Linux 容器 | 经 URL handler 打开 Steam 设置，绕开未实现 EWMH 的窗口管理器。 |
 | `tui/anland-osk.c` | RootFS 构建环境 | 屏幕键盘源码；由 `tui/install-steam.sh` 就地编译，供无法获得 Android 输入法的 X11 客户端使用。 |
 | `steam-osk`（由 `tui/install-steam.sh` 生成） | Linux 容器 | 开关上述屏幕键盘。 |
+| `tui/install-panvk.sh` | RootFS 构建环境 | 下载并安装 Mesa PanVK on kbase（mali-panvk）到 `/usr/local/lib/vulkan/panvk/`，仅 MTK 变体调用；经 libhybris 的 `LIBVULKAN` 开关加载，为 DXVK/Zink 提供真 GPU Vulkan。 |
 | `tui/install-anland-kde.sh` | ARM64 Linux 容器 | 安装 Anland patched KWin/Xwayland Release 包，并锁定相关包。 |
 | `tui/install-anland-gnome.sh` | ARM64 Debian/Ubuntu/Fedora/Arch 容器 | 安装 Anland patched Mutter Release 包，并锁定相关包。 |
 | `tui/install-anland-next.sh` | ARM64 Debian/Ubuntu/Fedora/Arch 容器 | 安装 Anland Next session 包（mini-wm + patched Xwayland + patched bubblewrap）。 |

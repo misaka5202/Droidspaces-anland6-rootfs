@@ -358,6 +358,32 @@ anland-shell → 容器 → START → APPS → 应用
 dma-buf，这条路径有效。SurfaceControl 合成器（`awl_sc.cpp`）调用的是同一份
 导入代码，却不呈现结果，原因尚未确定。
 
+### MTK 的 Vulkan：Mesa PanVK on kbase
+
+GLES 之外，MTK 变体的镜像还带一份 [mali-panvk](https://github.com/JimVulkan/mali-panvk)——
+Mesa PanVK 对手机自带 kbase 驱动（`/dev/mali0`）的移植，官方实测设备含
+Tab S10+（Immortalis-G720，天玑 9300+）。它给 DXVK（Wine 的 D3D9/10/11）
+与 Zink（GL）提供 Vulkan 1.4 真硬件路径，`VK_EXT_robustness2` 的 null
+descriptor 已支持（DXVK/zink 的硬需求）。
+
+加载链与 GLES 完全对称：
+
+```text
+glibc 应用 → libhybris libvulkan → LIBVULKAN 开关 → panvk（bionic 构建，
+只能经 android_dlopen 加载）→ /dev/mali0（kbase）
+```
+
+Wayland 上屏由 hybris 的 `vulkanplatform_wayland` 完成：把
+`VK_KHR_wayland_surface` 转成 `vkCreateAndroidSurfaceKHR`，交换链缓冲经
+`zwp_linux_dmabuf_v1` 交给 waylandbridge。内核前提与 GLES 路线相同：
+`mali_nsfix.ko` 缺了同样建不了 GPU context（上游 README 的「免 root」只对
+启动器架构成立——那是普通应用进程，没有 PID namespace）。
+
+未装 panvk 时 `LIBVULKAN` 保持默认（厂商 blob 的 Android Vulkan loader）。
+当前镜像里 Steam 游戏仍走 wined3d/OpenGL（DXVK 在容器内的 x86 Proton 下
+建不了 Vulkan 实例）；panvk 的直接受益者先是 Zink/vulkaninfo 这类 glibc
+Vulkan 客户端，DXVK 直通是后续按真机验证推进的课题。
+
 验证方式：截两次屏 —— 客户端运行时一次，退出后一次。只截一次不够：先前被
 强杀的客户端留下的窗口会产生假阳性。
 

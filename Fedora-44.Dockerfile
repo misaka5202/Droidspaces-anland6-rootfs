@@ -48,6 +48,7 @@ COPY scripts/tui/anland-osk.c /usr/local/share/anland-osk/anland-osk.c
 COPY scripts/tui/droidspaces-tui.sh /usr/local/bin/droidspaces-tui
 COPY scripts/tui/droidspaces-gpu.sh /usr/local/bin/droidspaces-gpu
 COPY scripts/hybris/setup-mali-hybris.sh /usr/local/sbin/setup-mali-hybris
+COPY scripts/tui/install-panvk.sh /usr/local/sbin/install-panvk
 COPY scripts/hybris/ /usr/local/share/mali-hybris/
 COPY scripts/install-desktop.sh /usr/local/sbin/install-desktop
 COPY scripts/configure-desktop.sh /usr/local/sbin/configure-desktop
@@ -82,7 +83,7 @@ RUN echo '%_install_langs all' > /etc/rpm/macros.image-language-conf && \
     echo "fastestmirror=True" >> /etc/dnf/dnf.conf && \
     echo "defaultyes=True" >> /etc/dnf/dnf.conf
 
-RUN chmod +x /usr/local/sbin/install-anland-* /usr/local/sbin/install-anland6 /usr/local/sbin/configure-anland6-env /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
+RUN chmod +x /usr/local/sbin/install-anland-* /usr/local/sbin/install-anland6 /usr/local/sbin/configure-anland6-env /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-panvk /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
     ln -s droidspaces-tui /usr/local/bin/dstui && \
     ln -s droidspaces-tui /usr/local/bin/ds-tui && \
     dnf install -y --setopt=install_weak_deps=False \
@@ -228,6 +229,7 @@ EOF
     # /opt/hy/inst/lib/libEGL.so 并选择硬件路径；否则它会走 llvmpipe 回退分支。
     if [ "${GPU_VENDOR_ARG:-qualcomm}" = "mediatek" ]; then
         DSHY_BUILD=1 /usr/local/sbin/setup-mali-hybris
+        DSHY_BUILD=1 /usr/local/sbin/install-panvk
     fi
 # GPU 厂商相关的环境变量：高通走 kgsl，MTK 走 libhybris + 厂商 Mali
     /usr/local/sbin/configure-gpu "${GPU_VENDOR_ARG:-qualcomm}" \
