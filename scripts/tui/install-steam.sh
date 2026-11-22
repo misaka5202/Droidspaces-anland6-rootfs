@@ -361,6 +361,26 @@ if [ -z "${STEAM_GL_MODE:-}" ]; then
     unset _gpu _d
 fi
 
+# Proton/Vulkan environment for game launches.  Validated on Adreno + Mali:
+#
+#   * DXVK cannot create a Vulkan instance in this container.  The only ICDs the
+#     x86-64 Proton binaries can load live in the FEX rootfs and Unity titles
+#     crash inside winevulkan, so route D3D through wined3d/OpenGL instead.
+#   * steam-launch-wrapper injects VK_INSTANCE_LAYERS with two Valve layers that
+#     no image ships; the loader then fails every instance creation.
+#   * lsteamclient asserts (steamclient_main.c:573) because no 64-bit
+#     steamclient.so exists, so disable the native Steam bridge.
+export PROTON_USE_WINED3D=1
+export VK_LOADER_LAYERS_DISABLE="~all~"
+export WINEDLLOVERRIDES="lsteamclient=d;steamclient64=d;steamclient=d"
+if [ -z "${VK_ICD_FILENAMES:-}" ]; then
+    for _icd in /usr/share/guestos/fex-mesa/usr/share/vulkan/icd.d/freedreno_icd.x86_64.json \
+                /usr/share/guestos/fex-mesa/usr/share/vulkan/icd.d/lvp_icd.x86_64.json; do
+        if [ -f "$_icd" ]; then VK_ICD_FILENAMES="$_icd"; export VK_ICD_FILENAMES; break; fi
+    done
+    unset _icd
+fi
+
 cd "$S/steamrtarm64" 2>/dev/null || exit 1
 exec ./steam -no-cef-sandbox -cef-disable-gpu -chromeosnopreallocate "$@"
 STEAM_LAUNCHER_EOF
@@ -406,6 +426,62 @@ StartupWMClass=steam
 DESKTOP_EOF
 
 chmod +x "$DESKTOP_FILE"
+
+# ---------- 6b. Game runtime support ----------
+log "==> Step 6b: Game runtime support (CJK fonts, pressure-vessel bypass)"
+
+# Proton ships a stub MS Gothic without CJK glyphs and fontconfig maps the
+# Windows font names onto DejaVu, so Chinese/Japanese UI text renders as tofu.
+# Point the common names at Noto CJK when the image provides it.
+FONTCONF_DIR="${ROOTFS_DIR:-}/etc/fonts"
+if [ -d "${ROOTFS_DIR:-}/usr/share/fonts/opentype/noto" ]; then
+    mkdir -p "$FONTCONF_DIR"
+    cat > "${FONTCONF_DIR}/local.conf" <<'FONTCONF_EOF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <alias binding="same"><family>MS Gothic</family>
+    <prefer><family>Noto Sans CJK SC</family><family>Noto Sans CJK JP</family></prefer></alias>
+  <alias binding="same"><family>MS UI Gothic</family>
+    <prefer><family>Noto Sans CJK SC</family></prefer></alias>
+  <alias binding="same"><family>MS Mincho</family>
+    <prefer><family>Noto Serif CJK SC</family></prefer></alias>
+  <alias binding="same"><family>Malgun Gothic</family>
+    <prefer><family>Noto Sans CJK SC</family></prefer></alias>
+  <alias binding="same"><family>Microsoft YaHei</family>
+    <prefer><family>Noto Sans CJK SC</family></prefer></alias>
+</fontconfig>
+FONTCONF_EOF
+    log "    fontconfig CJK aliases installed"
+fi
+
+# pressure-vessel cannot create user namespaces here (the Android kernel leaves
+# unprivileged userns off), so bwrap aborts with
+#     setting up uid map: No such file or directory
+# and Proton never starts the game.  Replace the runtime entry point with a
+# passthrough; the Collabora original is kept next to it as .pv.
+SLR_ENTRY="${STEAM_ROOT}/steamapps/common/SteamLinuxRuntime_4/_v2-entry-point"
+if [ -f "$SLR_ENTRY" ]; then
+    if [ ! -f "${SLR_ENTRY}.pv" ]; then
+        cp -a "$SLR_ENTRY" "${SLR_ENTRY}.pv"
+    fi
+    cat > "$SLR_ENTRY" <<'SLR_EOF'
+#!/bin/sh
+# passthrough: pressure-vessel/bwrap cannot create user namespaces in this
+# container, so run the requested command directly instead of entering the
+# Steam Runtime sandbox.
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --verb=*) shift ;;
+        --) shift; break ;;
+        *) break ;;
+    esac
+done
+exec "$@"
+SLR_EOF
+    chmod 755 "$SLR_ENTRY"
+    log "    SteamLinuxRuntime entry point -> passthrough"
+fi
 
 # ---------- 7. Fix ELF + ensure all binaries executable ----------
 log "==> Step 7: Ensuring ELF binaries are executable"
