@@ -81,7 +81,7 @@ jobs:
       wayland_package_repository: Goldzxcbug/droidspaces-package
       # Pin the tag here: the Steam rootfs is validated against this anland
       # release, so it must not drift with the core workflow default.
-      anland6_version: v6.2.10
+      anland6_version: v6.2.12
       build_id: ${{ needs.prepare.outputs.build_id }}
       asset_variant: zh
       publish_release: false
@@ -114,7 +114,7 @@ jobs:
       wayland_package_repository: Goldzxcbug/droidspaces-package
       # Pin the tag here: the Steam rootfs is validated against this anland
       # release, so it must not drift with the core workflow default.
-      anland6_version: v6.2.10
+      anland6_version: v6.2.12
       build_id: ${{ needs.prepare.outputs.build_id }}
       asset_variant: zh
       publish_release: false
