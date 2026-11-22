@@ -295,6 +295,14 @@ if [ -d "$MODULE_DIR" ] && [ "$DRY_RUN" -eq 0 ]; then
         sed -i 's/"auto_attach":[[:space:]]*[01]/"auto_attach": 1/' "$CONFIG_JSON" 2>/dev/null
         sed -i 's/"scale_mode":[[:space:]]*[012]/"scale_mode": 1/' "$CONFIG_JSON" 2>/dev/null
         sed -i "s/\"sc_enabled\":[[:space:]]*[01]/\"sc_enabled\": $SC_ENABLED/" "$CONFIG_JSON" 2>/dev/null
+        # auto_scale=1：按面板 dpi 推导缩放（zoom = dpi/1.6，560dpi→350%）。
+        # 关掉时客户端拿到的是物理像素，手机上 UI 小到不可用；桌面上想手动
+        # 定 zoom 再关。旧配置没有这个键，先插入再改值。
+        if grep -q '"auto_scale"' "$CONFIG_JSON"; then
+            sed -i 's/"auto_scale":[[:space:]]*[01]/"auto_scale": 1/' "$CONFIG_JSON" 2>/dev/null
+        else
+            sed -i 's/\("sc_enabled":[[:space:]]*[01],\)/\1\n  "auto_scale": 1,/' "$CONFIG_JSON" 2>/dev/null
+        fi
         ok "$M_CFG_UPDATED"
     else
         cat > "$CONFIG_JSON" <<JSON
@@ -306,6 +314,7 @@ if [ -d "$MODULE_DIR" ] && [ "$DRY_RUN" -eq 0 ]; then
   "xwayland_scale": 1,
   "auto_attach": 1,
   "sc_enabled": $SC_ENABLED,
+  "auto_scale": 1,
   "runtime_dir": "/data/local/tmp/awl",
   "socket_listen": 1
 }
