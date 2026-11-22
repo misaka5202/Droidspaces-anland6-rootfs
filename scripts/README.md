@@ -24,12 +24,7 @@
 | `tui/anland-osk.c` | RootFS 构建环境 | 屏幕键盘源码；由 `tui/install-steam.sh` 就地编译，供无法获得 Android 输入法的 X11 客户端使用。 |
 | `steam-osk`（由 `tui/install-steam.sh` 生成） | Linux 容器 | 开关上述屏幕键盘。 |
 | `tui/install-panvk.sh` | RootFS 构建环境 | 下载并安装 Mesa PanVK on kbase（mali-panvk）到 `/usr/local/lib/vulkan/panvk/`，仅 MTK 变体调用；经 libhybris 的 `LIBVULKAN` 开关加载，为 DXVK/Zink 提供真 GPU Vulkan。 |
-| `tui/install-anland-kde.sh` | ARM64 Linux 容器 | 安装 Anland patched KWin/Xwayland Release 包，并锁定相关包。 |
-| `tui/install-anland-gnome.sh` | ARM64 Debian/Ubuntu/Fedora/Arch 容器 | 安装 Anland patched Mutter Release 包，并锁定相关包。 |
 | `tui/install-anland-next.sh` | ARM64 Debian/Ubuntu/Fedora/Arch 容器 | 安装 Anland Next session 包（mini-wm + patched Xwayland + patched bubblewrap）。 |
-| `tui/install-anland-niri.sh` | ARM64 Debian 13、Ubuntu 26、Fedora 43/44、Arch 容器 | 安装 Anland Niri 与共享的 patched Xwayland 包。 |
-| `tui/install-anland-hyprland.sh`、`install-anland-mango.sh`、`install-anland-denial.sh` | ARM64 Debian 13、Ubuntu 26、Fedora 43/44、Arch 容器 | 安装对应 compositor 与 patched Xwayland 包。 |
-| `install-anland-desktop.sh` | RootFS 构建环境 | 根据桌面 slug 分发到 KDE、GNOME、Niri、Hyprland、Mango、Denial 或 Anland Next 安装器。 |
 | `lib/anland-build.sh` | RootFS 构建宿主 | 为 native/QEMU 构建统一解析 Anland 包族、Release tag 和 revision。 |
 | `install-usb-manager.sh` | Linux 容器 | 安装 Droidspaces USB Manager、发行版依赖、菜单入口和用户权限。 |
 | `systemd257.sh` | RootFS 构建环境 | 在需要时安装由包管理器管控的 systemd 257 完整包族，供旧 Android 内核使用。 |
@@ -99,7 +94,7 @@ sudo ./scripts/tui/install-mesa.sh --3  # ghproxy.net
 | Fedora | `/etc/dnf/dnf.conf` 中脚本管理的 `exclude` 块 |
 | Arch | `/etc/pacman.conf` 中脚本管理的 `IgnorePkg` 块 |
 
-锁定范围仅根据归档中实际安装的 Mesa 包生成。KWin/Xwayland 与 Mutter/Xwayland 分别由 `install-anland-kde.sh` 和 `install-anland-gnome.sh` 锁定。托管配置可重复运行，不会不断追加相同块；已有的非托管配置会保留。
+锁定范围仅根据归档中实际安装的 Mesa 包生成。托管配置可重复运行，不会不断追加相同块；已有的非托管配置会保留。
 
 ## 新增桌面 profile
 
@@ -113,40 +108,6 @@ sudo ./scripts/tui/install-mesa.sh --3  # ghproxy.net
 桌面翻译文件由各 Dockerfile 在安装软件包前全局放开：Fedora 写入 `%_install_langs all`，Debian/Ubuntu 取消 dpkg 的 locale `path-exclude`，Arch 移除 `NoExtract`。profile 不再需要重复处理语言文件。
 
 七个 Dockerfile 和核心工作流已经使用通用 profile 接口，普通 X11 桌面无需复制 Dockerfile。依赖 patched Wayland 包的 profile 还需在 `lib/anland-build.sh` 的 `anland_package_family` 中登记包族。
-
-## Anland KDE 安装器
-
-`install-anland-kde.sh` 默认从 `Goldzxcbug/droidspaces-package` 的固定滚动 Release `anland-kde-packages` 读取 `anland-kde-manifest`，为 Debian 13、Ubuntu 26.04、Fedora 43/44 或 Arch Linux ARM64 安装匹配版本的 patched KWin/Xwayland 包。
-
-```bash
-sudo ./scripts/tui/install-anland-kde.sh
-```
-
-它同样支持 `--1`、`--2`、`--3` 选择 GitHub、`gh-proxy.com` 或 `ghproxy.net`；省略时测速后交互选择。镜像下载的清单与归档均使用 GitHub API digest 校验。脚本按系统 locale 输出中文或英文，并通过 APT hold、DNF exclude 或 Pacman `IgnorePkg` 防止系统更新覆盖安装结果。
-
-安装公开 Fork 发布的包时只需覆盖仓库；Fork 必须提供固定标签 `anland-kde-packages`：
-
-```bash
-sudo ANLAND_RELEASE_REPOSITORY=owner/repository \
-  ./scripts/tui/install-anland-kde.sh --1
-```
-
-Anland 宿主模块、App、SELinux、绑定挂载和 Droidspaces 权限仍需按[Wayland 与 Anland 配置教程](../docs/zh/桌面与Anland.md#wayland-和-anland-宿主端配置)完成。
-
-## Anland GNOME 安装器
-
-`install-anland-gnome.sh` 默认从固定滚动 Release `anland-gnome-packages` 读取 `anland-gnome-manifest`，为 Debian 13、Ubuntu 26.04 或 Arch Linux ARM64 安装 patched Mutter 运行时包。Arch 只安装 `mutter` 运行包，并通过 pacman `IgnorePkg` 防止升级覆盖；Debian/Ubuntu 使用 APT hold。GNOME 的各发行版软件包均由 `droidspaces-package` 发布，RootFS 构建与后续更新都通过 Release 清单获取对应归档。下载源选择、镜像 digest 校验和命令行参数与 KDE 安装器一致。
-
-```bash
-sudo ./scripts/tui/install-anland-gnome.sh
-```
-
-使用公开 Fork 的包时同时覆盖 GNOME 仓库变量：
-
-```bash
-sudo ANLAND_RELEASE_REPOSITORY=owner/repository \
-  ./scripts/tui/install-anland-gnome.sh --1
-```
 
 ## Anland Next 安装器
 
@@ -173,14 +134,6 @@ anland-wayland 镜像带一套系统级音频桥接（仅在该后端安装）�
 ```bash
 sudo ANLAND_NEXT_RELEASE_REPOSITORY=owner/repository \
   ./scripts/tui/install-anland-next.sh --1
-```
-
-## Anland Niri 安装器
-
-Niri、Hyprland、Mango 和 Denial 安装器从各自固定滚动 Release 安装 compositor 与 patched `xorg-xwayland`，支持 Debian 13、Ubuntu 26、Fedora 43/44 和 Arch ARM64。四个桌面在 `scripts/desktops/<slug>.sh` 各有独立 profile；profile 提供终端、XDG portal、音频和字体等基础服务，Niri 在 Arch 上还包含常用桌面工具。各 compositor 共用 patched Xwayland；安装器会阻止互相覆盖，并在卸载时保留其他组件使用的包。
-
-```bash
-sudo ./scripts/tui/install-anland-niri.sh
 ```
 
 ## USB Manager 安装器
@@ -231,8 +184,6 @@ sudo download-firmware
 ```bash
 bash -n scripts/tui/install-mesa.sh
 bash -n scripts/tui/droidspaces-tui.sh
-bash -n scripts/tui/install-anland-kde.sh
-bash -n scripts/tui/install-anland-gnome.sh
 bash -n scripts/tui/install-anland-next.sh
 bash -n scripts/install-usb-manager.sh
 shellcheck scripts/tui/install-mesa.sh

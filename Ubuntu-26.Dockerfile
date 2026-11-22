@@ -20,7 +20,6 @@ ARG ENABLE_systemd257_ARG
 ARG USERNAME
 ARG ANLAND_RELEASE_REPOSITORY=Goldzxcbug/droidspaces-package
 ARG ANLAND_PACKAGE_REVISION=unknown
-ARG ANLAND_MAJOR_ARG=6
 # anland release tag；ANLAND6_XWAYLAND=0 用发行版自带 Xwayland（高通/MTK 通用）
 ARG ANLAND6_VERSION=6.2
 ARG ANLAND6_XWAYLAND=0
@@ -46,14 +45,7 @@ COPY scripts/bashrc.sh /etc/profile.d/ds-aliases.sh
 
 # 通用 Droidspaces USB Manager 安装器
 COPY scripts/install-usb-manager.sh /usr/local/sbin/install-droidspaces-usb-manager
-COPY scripts/tui/install-anland-kde.sh /usr/local/sbin/install-anland-kde
-COPY scripts/tui/install-anland-gnome.sh /usr/local/sbin/install-anland-gnome
 COPY scripts/tui/install-anland-next.sh /usr/local/sbin/install-anland-next
-COPY scripts/tui/install-anland-niri.sh /usr/local/sbin/install-anland-niri
-COPY scripts/tui/install-anland-hyprland.sh /usr/local/sbin/install-anland-hyprland
-COPY scripts/tui/install-anland-mango.sh /usr/local/sbin/install-anland-mango
-COPY scripts/tui/install-anland-denial.sh /usr/local/sbin/install-anland-denial
-COPY scripts/install-anland-desktop.sh /usr/local/sbin/install-anland-desktop
 COPY scripts/tui/install-anland6.sh /usr/local/sbin/install-anland6
 COPY scripts/configure-anland6-env.sh /usr/local/sbin/configure-anland6-env
 COPY scripts/tui/install-mesa.sh /usr/local/sbin/install-mesa
@@ -92,7 +84,7 @@ RUN if [ "$DISPLAY_BACKEND" = "anland-wayland" ]; then \
     rm -f /tmp/anland-pulse-tunnel.conf /tmp/anland-audio-watch /tmp/anland-audio-watch.service
 
 # 赋予相关脚本可执行权限
-RUN chmod +x /usr/local/bin/download-firmware /usr/local/sbin/nosnap /etc/profile.d/ds-aliases.sh /usr/local/sbin/install-anland-* /usr/local/sbin/install-anland6 /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-panvk /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
+RUN chmod +x /usr/local/bin/download-firmware /usr/local/sbin/nosnap /etc/profile.d/ds-aliases.sh /usr/local/sbin/install-anland-next /usr/local/sbin/install-anland6 /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-panvk /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
     ln -s droidspaces-tui /usr/local/bin/dstui && \
     ln -s droidspaces-tui /usr/local/bin/ds-tui
 
@@ -128,13 +120,6 @@ RUN apt-get update && \
     kmod tzdata tar && \
     /usr/local/sbin/install-desktop "$DESKTOP" && \
     ############################################## Anland Wayland 支持 ################################################
-    # 5.x 才在这里装 patched KWin；6.x 的 anlandx 在 useradd 之后装。
-    if [ "$DISPLAY_BACKEND" = "anland-wayland" ] && [ "${ANLAND_MAJOR_ARG:-6}" != "6" ]; then \
-        echo "--> [开启] 正在安装 $DESKTOP 的 Anland 包 (${ANLAND_PACKAGE_REVISION})..." && \
-        ANLAND_RELEASE_REPOSITORY="$ANLAND_RELEASE_REPOSITORY" \
-        /usr/local/sbin/install-anland-desktop "$DESKTOP" --1 && \
-        echo "--> [开启] $DESKTOP 的 Anland 支持已安装"; \
-    fi && \
     ######################################################################################################
     #输入法 fcitx5 (可选)
     if [ "$ENABLE_srf_ARG" = "true" ]; then \
@@ -195,7 +180,7 @@ RUN sed -i '/en_US.UTF-8/s/^# //' /etc/locale.gen && \
 # 那个脚本会把 ~/.local/bin/anland-session 写进用户家目录。
 # 最早的版本放在 install-desktop 那一步，useradd 还没执行，报「找不到用户」。
 # ---------------------------------------------------------------------------
-RUN if [ "$DISPLAY_BACKEND" = "anland-wayland" ] && [ "${ANLAND_MAJOR_ARG:-6}" = "6" ]; then \
+RUN if [ "$DISPLAY_BACKEND" = "anland-wayland" ]; then \
         echo "--> [开启] 安装 Anland 6.x 会话（anlandx）..." && \
         ANLAND_VERSION="${ANLAND6_VERSION}" ANLAND_XWAYLAND="${ANLAND6_XWAYLAND}" \
         /usr/local/sbin/install-anland6 "$USERNAME" && \
@@ -462,7 +447,6 @@ RUN rm -f \
         /usr/local/sbin/configure-chrome \
         /usr/local/sbin/configure-desktop \
         /usr/local/sbin/install-desktop \
-        /usr/local/sbin/install-anland-desktop \
         /usr/local/sbin/install-droidspaces-usb-manager \
         /usr/local/sbin/systemd257 \
         /usr/local/sbin/nosnap && \

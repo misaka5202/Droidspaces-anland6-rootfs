@@ -22,12 +22,7 @@ This directory contains installers used while building the RootFS, maintenance t
 | `tui/anland-osk.c` | RootFS build environment | On-screen keyboard source; compiled in place by `tui/install-steam.sh` for X11 clients that can never reach the Android IME. |
 | `steam-osk` (written by `tui/install-steam.sh`) | Linux container | Toggles that on-screen keyboard. |
 | `tui/install-panvk.sh` | RootFS build environment | Downloads Mesa PanVK on kbase (mali-panvk) into `/usr/local/lib/vulkan/panvk/`; invoked only on the MTK variant. Loaded through libhybris's `LIBVULKAN` switch, it gives DXVK and Zink a real-GPU Vulkan. |
-| `tui/install-anland-kde.sh` | ARM64 Linux container | Installs Anland patched KWin/Xwayland Release packages and locks them. |
-| `tui/install-anland-gnome.sh` | ARM64 Debian/Ubuntu/Fedora/Arch container | Installs Anland patched Mutter Release packages and locks them. |
 | `tui/install-anland-next.sh` | ARM64 Debian/Ubuntu/Fedora/Arch container | Installs the Anland Next session package (mini-wm + patched Xwayland + patched bubblewrap). |
-| `tui/install-anland-niri.sh` | ARM64 Debian 13, Ubuntu 26, Fedora 43/44, and Arch container | Installs Anland Niri and its shared patched Xwayland package. |
-| `tui/install-anland-hyprland.sh`, `install-anland-mango.sh`, `install-anland-denial.sh` | ARM64 Debian 13, Ubuntu 26, Fedora 43/44, and Arch container | Installs the compositor and its patched Xwayland package. |
-| `install-anland-desktop.sh` | RootFS build environment | Dispatches a desktop slug to KDE, GNOME, Niri, Hyprland, Mango, Denial, or Anland Next. |
 | `lib/anland-build.sh` | RootFS build host | Resolves the Anland package family, Release tag, and revision for native/QEMU builds. |
 | `install-usb-manager.sh` | Linux container | Installs Droidspaces USB Manager, distribution dependencies, launchers, and user permissions. |
 | `systemd257.sh` | RootFS build environment | Installs a complete package-manager-owned systemd 257 family when required by an old Android kernel. |
@@ -97,7 +92,7 @@ After installation, persistent package locks are written for each distribution:
 | Fedora | Installer-managed `exclude` block in `/etc/dnf/dnf.conf` |
 | Arch | Installer-managed `IgnorePkg` block in `/etc/pacman.conf` |
 
-The lock list is generated only from Mesa packages present in the archive. KWin/Xwayland and Mutter/Xwayland are held separately by `install-anland-kde.sh` and `install-anland-gnome.sh`. Managed configuration is idempotent, and unrelated existing configuration is preserved.
+The lock list is generated only from Mesa packages present in the archive. Managed configuration is idempotent, and unrelated existing configuration is preserved.
 
 ## Adding a Desktop Profile
 
@@ -111,40 +106,6 @@ Desktop names, target capabilities, and backend compatibility live in `lib/deskt
 Desktop translation files are enabled globally by each Dockerfile before packages are installed: Fedora writes `%_install_langs all`, Debian/Ubuntu disable the dpkg locale `path-exclude`, and Arch removes `NoExtract`. Profiles no longer need to handle language files themselves.
 
 All seven Dockerfiles and the reusable workflow already use the generic profile interface, so an ordinary X11 desktop does not require copied Dockerfiles. Profiles that require patched Wayland packages must also map to a package family in `lib/anland-build.sh` through `anland_package_family`.
-
-## Anland KDE Installer
-
-`install-anland-kde.sh` reads `anland-kde-manifest` from the fixed `anland-kde-packages` rolling Release in `Goldzxcbug/droidspaces-package` by default, then installs the matching patched KWin/Xwayland packages for Debian 13, Ubuntu 26.04, Fedora 43/44, or Arch Linux on ARM64.
-
-```bash
-sudo ./scripts/tui/install-anland-kde.sh
-```
-
-It also accepts `--1`, `--2`, or `--3` for GitHub, `gh-proxy.com`, or `ghproxy.net`; with no option, it probes the sources and prompts. Both the manifest and archive from a mirror are checked against GitHub API digests. Messages follow the system locale, and APT holds, DNF excludes, or Pacman `IgnorePkg` entries prevent upgrades from replacing the installed packages.
-
-To install packages published by a public fork, override only the repository. The fork must provide the fixed `anland-kde-packages` tag:
-
-```bash
-sudo ANLAND_RELEASE_REPOSITORY=owner/repository \
-  ./scripts/tui/install-anland-kde.sh --1
-```
-
-The Anland host module, app, SELinux policy, bind mount, and Droidspaces permissions must still be configured as described in the [Wayland and Anland setup guide](../docs/en/desktop-and-anland.md#anland-wayland-host-setup).
-
-## Anland GNOME Installer
-
-`install-anland-gnome.sh` reads `anland-gnome-manifest` from the fixed `anland-gnome-packages` rolling Release and installs patched Mutter runtime packages for Debian 13, Ubuntu 26.04, or Arch Linux ARM64. On Arch it installs only the `mutter` runtime package and uses pacman `IgnorePkg`; Debian/Ubuntu use APT holds. Packages for all three targets are published by `droidspaces-package`; RootFS builds and later updates fetch the matching archive through the Release manifest. Its source selection, mirror digest checks, and arguments match the KDE installer.
-
-```bash
-sudo ./scripts/tui/install-anland-gnome.sh
-```
-
-Override the GNOME repository variable when using packages from a public fork:
-
-```bash
-sudo ANLAND_RELEASE_REPOSITORY=owner/repository \
-  ./scripts/tui/install-anland-gnome.sh --1
-```
 
 ## Anland Next Installer
 
@@ -171,14 +132,6 @@ To use packages from a public fork, override the repository variable:
 ```bash
 sudo ANLAND_NEXT_RELEASE_REPOSITORY=owner/repository \
   ./scripts/tui/install-anland-next.sh --1
-```
-
-## Anland Niri Installer
-
-Niri, Hyprland, Mango, and Denial installers fetch their compositor and patched `xorg-xwayland` packages from fixed rolling Releases on Debian 13, Ubuntu 26, Fedora 43/44, and Arch ARM64. Each desktop has its own profile at `scripts/desktops/<slug>.sh`; the profile provides a terminal, XDG portal, audio, and fonts, and Niri on Arch also includes common desktop utilities. These compositors share patched Xwayland, and their installers prevent conflicting replacement while preserving packages used by other installed components.
-
-```bash
-sudo ./scripts/tui/install-anland-niri.sh
 ```
 
 ## USB Manager Installer
@@ -229,8 +182,6 @@ After changing a shell script, run at least a syntax check. Use ShellCheck when 
 ```bash
 bash -n scripts/tui/install-mesa.sh
 bash -n scripts/tui/droidspaces-tui.sh
-bash -n scripts/tui/install-anland-kde.sh
-bash -n scripts/tui/install-anland-gnome.sh
 bash -n scripts/tui/install-anland-next.sh
 bash -n scripts/install-usb-manager.sh
 shellcheck scripts/tui/install-mesa.sh

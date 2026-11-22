@@ -52,7 +52,7 @@ MENU_ESCAPE_SEQUENCE=""
 MENU_TTY_ECHO_DISABLED=false
 DYNAMIC_MENU_DRAWN=false
 
-readonly -a COMPONENT_NAMES=(mesa hangover fonts kde gnome niri hyprland mango denial anland-next)
+readonly -a COMPONENT_NAMES=(mesa hangover fonts anland-next)
 readonly -a SPINNER_FRAMES=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
 declare -A COMPONENT_CURRENT_VERSIONS=()
 declare -A COMPONENT_UPSTREAM_VERSIONS=()
@@ -201,33 +201,13 @@ set_desktop_component() {
     DESKTOP_COMPONENT_LABEL=""
     DESKTOP_COMPONENT_MODE="choose"
     case "$DESKTOP_PROFILE" in
-        kde|kde-mobile)
-            DESKTOP_COMPONENT="kde"
-            DESKTOP_COMPONENT_LABEL="Anland KDE (KWin/Xwayland)"
-            DESKTOP_COMPONENT_MODE="direct"
-            ;;
-        niri)
-            DESKTOP_COMPONENT="niri"
-            DESKTOP_COMPONENT_LABEL="Anland Niri (Niri/Xwayland)"
-            DESKTOP_COMPONENT_MODE="direct"
-            ;;
-        hyprland|mango|denial)
-            DESKTOP_COMPONENT="$DESKTOP_PROFILE"
-            DESKTOP_COMPONENT_LABEL="Anland ${DESKTOP_PROFILE^}"
-            DESKTOP_COMPONENT_MODE="direct"
-            ;;
-        gnome)
-            DESKTOP_COMPONENT="gnome"
-            DESKTOP_COMPONENT_LABEL="Anland GNOME (Mutter/Xwayland)"
-            DESKTOP_COMPONENT_MODE="direct"
-            ;;
         anland-next)
             DESKTOP_COMPONENT="anland-next"
             DESKTOP_COMPONENT_LABEL="Anland Next session"
             DESKTOP_COMPONENT_MODE="direct"
             ;;
-        mobile)
-            # mobile 只提供应用集，没有可更新的 Anland 组件。
+        mobile|steam-gaming|none)
+            # 应用集档位：6.x 下桌面=软体集合，没有可更新的 Anland 5.x 组件。
             DESKTOP_COMPONENT=""
             DESKTOP_COMPONENT_LABEL=""
             DESKTOP_COMPONENT_MODE="none"
@@ -259,19 +239,8 @@ detect_desktop_component() {
     fi
 
     # Compatibility for RootFS images built before the desktop config existed.
-    if managed_component_installed kde; then
-        set_desktop_component kde
-    elif managed_component_installed niri; then
-        set_desktop_component niri
-    elif managed_component_installed gnome; then
-        set_desktop_component gnome
-    elif managed_component_installed hyprland; then
-        set_desktop_component hyprland
-    elif managed_component_installed mango; then
-        set_desktop_component mango
-    elif managed_component_installed denial; then
-        set_desktop_component denial
-    elif managed_component_installed anland-next; then
+    # 6.x 镜像唯一的 Anland 组件是 anland-next（会话包）。
+    if managed_component_installed anland-next; then
         set_desktop_component anland-next
     else
         set_desktop_component none
@@ -497,10 +466,6 @@ installer_names() {
         mesa) printf '%s\n%s\n' "install-mesa.sh" "install-mesa" ;;
         hangover) printf '%s\n%s\n' "install-hangover-wine.sh" "install-hangover-wine" ;;
         fonts) printf '%s\n%s\n' "install-winefonts.sh" "install-winefonts" ;;
-        kde) printf '%s\n%s\n' "install-anland-kde.sh" "install-anland-kde" ;;
-        gnome) printf '%s\n%s\n' "install-anland-gnome.sh" "install-anland-gnome" ;;
-        niri) printf '%s\n%s\n' "install-anland-niri.sh" "install-anland-niri" ;;
-        hyprland|mango|denial) printf '%s\n%s\n' "install-anland-$1.sh" "install-anland-$1" ;;
         anland-next) printf '%s\n%s\n' "install-anland-next.sh" "install-anland-next" ;;
         *) return 1 ;;
     esac
@@ -557,18 +522,6 @@ component_supported() {
                     *) return 1 ;;
                 esac
             fi
-            ;;
-        kde)
-            case "$SYSTEM_ID:$SYSTEM_VERSION" in
-                arch:*|archarm:*|archlinux:*|debian:13*|ubuntu:26.04*|fedora:43*|fedora:44*) return 0 ;;
-                *) return 1 ;;
-            esac
-            ;;
-        niri|gnome|hyprland|mango|denial)
-            case "$SYSTEM_ID:$SYSTEM_VERSION" in
-                debian:13*|ubuntu:26.04*|fedora:43*|fedora:44*|arch:*|archarm:*|archlinux:*) return 0 ;;
-                *) return 1 ;;
-            esac
             ;;
         anland-next)
             case "$SYSTEM_ID:$SYSTEM_VERSION" in
@@ -652,24 +605,6 @@ detected_component_package_version() {
         fonts)
             [[ -d /usr/local/share/fonts/winefonts ]] && version="$(msg '未知版本' 'unknown')"
             ;;
-        kde)
-            version="$(installed_package_version kwin-wayland kwin-x11 kwin-common kwin)" || true
-            ;;
-        niri)
-            version="$(installed_package_version niri-anland)" || true
-            ;;
-        hyprland)
-            version="$(installed_package_version hyprland-anland hyprland)" || true
-            ;;
-        mango)
-            version="$(installed_package_version mango-anland)" || true
-            ;;
-        denial)
-            version="$(installed_package_version denial)" || true
-            ;;
-        gnome)
-            version="$(installed_package_version mutter-common mutter)" || true
-            ;;
         anland-next)
             version="$(installed_package_version anland-session)" || true
             ;;
@@ -708,40 +643,9 @@ managed_component_installed() {
                 *) return 1 ;;
             esac
             ;;
-        hangover|fonts|niri|mango|denial|anland-next)
+        hangover|fonts|anland-next)
             # These components use dedicated package names (or a managed font directory).
             return 0
-            ;;
-        kde)
-            case "$SYSTEM_ID" in
-                debian|ubuntu) [[ -s /var/lib/anland-kde/apt-holds ]] ;;
-                fedora) grep -Fqx '# BEGIN anland-kde package holds' /etc/dnf/dnf.conf 2>/dev/null ;;
-                arch|archarm|archlinux)
-                    grep -Eq '^[[:space:]]*IgnorePkg[[:space:]]*=.*(^|[[:space:]])kwin([[:space:]]|$)' \
-                        /etc/pacman.conf 2>/dev/null
-                    ;;
-                *) return 1 ;;
-            esac
-            ;;
-        hyprland)
-            installed_package_version hyprland-anland >/dev/null 2>&1 && return 0
-            # Debian/Ubuntu replace the distribution's hyprland package.
-            case "$SYSTEM_ID" in
-                debian|ubuntu) [[ -s /var/lib/anland-hyprland/apt-holds ]] ;;
-                *) return 1 ;;
-            esac
-            ;;
-        gnome)
-            case "$SYSTEM_ID" in
-                debian|ubuntu) [[ -s /var/lib/anland-gnome/apt-holds ]] ;;
-                fedora) grep -Fqx '# BEGIN anland-gnome package holds' /etc/dnf/dnf.conf 2>/dev/null ;;
-                arch|archarm|archlinux)
-                    [[ -s /var/lib/anland-gnome/pacman-packages ]] || \
-                        grep -Eq '^[[:space:]]*IgnorePkg[[:space:]]*=.*(^|[[:space:]])mutter([[:space:]]|$)' \
-                            /etc/pacman.conf 2>/dev/null
-                    ;;
-                *) return 1 ;;
-            esac
             ;;
         *) return 1 ;;
     esac
@@ -766,14 +670,6 @@ component_versions_match() {
         fonts)
             current="${current#*:}"
             [[ "$current" == "$upstream"-* || "$current" == "$upstream"+* ]]
-            ;;
-        kde|gnome)
-            current="${current#*:}"
-            [[ "$current" == "$upstream"-* ]]
-            ;;
-        niri|hyprland|mango|denial)
-            current="${current#*:}"
-            [[ "$current" == "$upstream" || "$current" == "$upstream"-* || "$current" == "$upstream"+* ]]
             ;;
         anland-next)
             # Debian uses the bare package version; RPM and pacman append
@@ -819,40 +715,6 @@ component_release_parts() {
             prefix="winefonts-"
             suffix=".tar.xz"
             ;;
-        kde)
-            tag="anland-kde-packages"
-            case "$SYSTEM_ID:$SYSTEM_VERSION" in
-                arch:*|archarm:*|archlinux:*) prefix="anland-kde-arch-kwin-"; suffix="-aarch64.tar.gz" ;;
-                debian:13*) prefix="anland-kde-debian13-kwin-"; suffix="-arm64.tar.gz" ;;
-                ubuntu:26.04*) prefix="anland-kde-ubuntu2604-kwin-"; suffix="-arm64.tar.gz" ;;
-                fedora:43*) prefix="anland-kde-fedora43-kwin-"; suffix="-aarch64.tar.gz" ;;
-                fedora:44*) prefix="anland-kde-fedora44-kwin-"; suffix="-aarch64.tar.gz" ;;
-                *) return 1 ;;
-            esac
-            ;;
-        niri|hyprland|mango|denial)
-            is_arm64 || return 1
-            tag="anland-$component-packages"
-            case "$SYSTEM_ID:$SYSTEM_VERSION" in
-                arch:*|archarm:*|archlinux:*) prefix="anland-$component-arch-"; suffix="-aarch64.tar.gz" ;;
-                debian:13*) prefix="anland-$component-debian13-"; suffix="-arm64.tar.gz" ;;
-                ubuntu:26.04*) prefix="anland-$component-ubuntu2604-"; suffix="-arm64.tar.gz" ;;
-                fedora:43*) prefix="anland-$component-fedora43-"; suffix="-aarch64.tar.gz" ;;
-                fedora:44*) prefix="anland-$component-fedora44-"; suffix="-aarch64.tar.gz" ;;
-                *) return 1 ;;
-            esac
-            ;;
-        gnome)
-            tag="anland-gnome-packages"
-            case "$SYSTEM_ID:$SYSTEM_VERSION" in
-                arch:*|archarm:*|archlinux:*) prefix="anland-gnome-arch-mutter-"; suffix="-aarch64.tar.gz" ;;
-                debian:13*) prefix="anland-gnome-debian13-mutter-"; suffix="-arm64.tar.gz" ;;
-                ubuntu:26.04*) prefix="anland-gnome-ubuntu2604-mutter-"; suffix="-arm64.tar.gz" ;;
-                fedora:43*) prefix="anland-gnome-fedora43-mutter-"; suffix="-aarch64.tar.gz" ;;
-                fedora:44*) prefix="anland-gnome-fedora44-mutter-"; suffix="-aarch64.tar.gz" ;;
-                *) return 1 ;;
-            esac
-            ;;
         anland-next)
             tag="anland-session-packages"
             case "$SYSTEM_ID:$SYSTEM_VERSION" in
@@ -889,9 +751,6 @@ component_release_manifest_name() {
         mesa) printf '%s' 'mesa-distribution-manifest' ;;
         hangover) printf '%s' 'hangover-wine-manifest' ;;
         fonts) printf '%s' 'winefonts-manifest' ;;
-        kde) printf '%s' 'anland-kde-manifest' ;;
-        gnome) printf '%s' 'anland-gnome-manifest' ;;
-        niri|hyprland|mango|denial) printf 'anland-%s-manifest' "$1" ;;
         anland-next) printf '%s' 'anland-session-manifest' ;;
         *) return 1 ;;
     esac
@@ -1018,7 +877,7 @@ component_versions_pending() {
 component_visible() {
     case "$1" in
         mesa|hangover|fonts) return 0 ;;
-        kde|gnome|niri|hyprland|mango|denial|anland-next)
+        anland-next)
             [[ "$DESKTOP_COMPONENT_MODE" == choose || "$DESKTOP_COMPONENT" == "$1" ]]
             ;;
         *) return 1 ;;
@@ -1149,7 +1008,7 @@ component_status_display() {
 desktop_selection_status_display() {
     local component upstream installed_any=false
 
-    for component in kde gnome niri hyprland mango denial anland-next; do
+    for component in anland-next; do
         if [[ "${COMPONENT_INSTALLED[$component]:-false}" == true ]]; then
             installed_any=true
         fi
@@ -1158,7 +1017,7 @@ desktop_selection_status_display() {
         printf '%b%s%b' "$COLOR_RED" "$(msg '未安装' 'not installed')" "$COLOR_RESET"
         return
     fi
-    for component in kde gnome niri hyprland mango denial anland-next; do
+    for component in anland-next; do
         [[ "${COMPONENT_INSTALLED[$component]:-false}" == true ]] || continue
         upstream="${COMPONENT_UPSTREAM_VERSIONS[$component]:-}"
         if [[ "$upstream" == pending ]]; then
@@ -1166,7 +1025,7 @@ desktop_selection_status_display() {
             return
         fi
     done
-    for component in kde gnome niri hyprland mango denial anland-next; do
+    for component in anland-next; do
         [[ "${COMPONENT_INSTALLED[$component]:-false}" == true ]] || continue
         upstream="${COMPONENT_UPSTREAM_VERSIONS[$component]:-}"
         if [[ "$upstream" == "$(msg '超时' 'timeout')" ]]; then
@@ -1322,14 +1181,8 @@ desktop_component_selection_menu() {
             draw_dynamic_menu_frame
             draw_header
             printf '\n%b%s%b\n\n' "$COLOR_BOLD" \
-                "$(msg '选择桌面组件' 'Select desktop component')" "$COLOR_RESET"
-            print_component_status "1" "Anland KDE (KWin/Xwayland)" "kde"
-            print_component_status "2" "Anland GNOME (Mutter/Xwayland)" "gnome"
-            print_component_status "3" "Anland Niri (Niri/Xwayland)" "niri"
-            print_component_status "4" "Anland Next session" "anland-next"
-            print_component_status "5" "Anland Hyprland" "hyprland"
-            print_component_status "6" "Anland Mango" "mango"
-            print_component_status "7" "Anland Denial" "denial"
+                "$(msg '选择 Anland 会话组件' 'Select Anland session component')" "$COLOR_RESET"
+            print_component_status "1" "Anland Next session" "anland-next"
             printf '  %b[0]%b %s\n\n' "$COLOR_CYAN" "$COLOR_RESET" "$(msg '返回' 'Back')"
         fi
         draw_dynamic_menu_prompt
@@ -1345,31 +1198,7 @@ desktop_component_selection_menu() {
         case "${choice,,}" in
             1)
                 restore_dynamic_menu_echo
-                component_menu "kde" "Anland KDE (KWin/Xwayland)"
-                return
-                ;;
-            2)
-                restore_dynamic_menu_echo
-                component_menu "gnome" "Anland GNOME (Mutter/Xwayland)"
-                return
-                ;;
-            3)
-                restore_dynamic_menu_echo
-                component_menu "niri" "Anland Niri (Niri/Xwayland)"
-                return
-                ;;
-            4)
-                restore_dynamic_menu_echo
                 component_menu "anland-next" "Anland Next session"
-                return
-                ;;
-            5|6|7)
-                restore_dynamic_menu_echo
-                case "$choice" in
-                    5) component_menu hyprland "Anland Hyprland" ;;
-                    6) component_menu mango "Anland Mango" ;;
-                    7) component_menu denial "Anland Denial" ;;
-                esac
                 return
                 ;;
             0|q)

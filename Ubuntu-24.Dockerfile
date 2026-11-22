@@ -39,8 +39,6 @@ COPY scripts/bashrc.sh /etc/profile.d/ds-aliases.sh
 
 # 通用 Droidspaces USB Manager 安装器
 COPY scripts/install-usb-manager.sh /usr/local/sbin/install-droidspaces-usb-manager
-COPY scripts/tui/install-anland-kde.sh /usr/local/sbin/install-anland-kde
-COPY scripts/tui/install-anland-gnome.sh /usr/local/sbin/install-anland-gnome
 COPY scripts/tui/install-anland-next.sh /usr/local/sbin/install-anland-next
 COPY scripts/tui/install-mesa.sh /usr/local/sbin/install-mesa
 COPY scripts/tui/configure-gpu.sh /usr/local/sbin/configure-gpu
@@ -80,7 +78,7 @@ RUN if [ "$DISPLAY_BACKEND" = "anland-wayland" ]; then \
     rm -f /tmp/anland-pulse-tunnel.conf /tmp/anland-pipewire.conf /tmp/anland-audio-watch /tmp/anland-audio-watch.service
 
 # 赋予相关脚本可执行权限
-RUN chmod +x /usr/local/bin/download-firmware /usr/local/sbin/nosnap /etc/profile.d/ds-aliases.sh /usr/local/sbin/install-anland-* /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-panvk /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
+RUN chmod +x /usr/local/bin/download-firmware /usr/local/sbin/nosnap /etc/profile.d/ds-aliases.sh /usr/local/sbin/install-anland-next /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-panvk /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
     ln -s droidspaces-tui /usr/local/bin/dstui && \
     ln -s droidspaces-tui /usr/local/bin/ds-tui
 
@@ -428,7 +426,6 @@ RUN rm -f \
         /usr/local/sbin/configure-chrome \
         /usr/local/sbin/configure-desktop \
         /usr/local/sbin/install-desktop \
-        /usr/local/sbin/install-anland-desktop \
         /usr/local/sbin/install-droidspaces-usb-manager \
         /usr/local/sbin/systemd257 \
         /usr/local/sbin/nosnap && \
