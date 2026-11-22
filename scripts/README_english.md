@@ -16,6 +16,11 @@ This directory contains installers used while building the RootFS, maintenance t
 | `tui/install-mesa.sh` | ARM64 Linux container | Installs the latest Android-container Mesa build and MediaCodec VA-API driver, then locks Mesa packages. |
 | `tui/install-hangover-wine.sh` | ARM64 Linux container | Installs the Hangover Wine Release packages matching the current distribution. |
 | `tui/install-winefonts.sh` | Linux container | Installs the Wine font bundle and refreshes the fontconfig cache. |
+| `tui/install-steam.sh` | RootFS build environment | Assembles the Valve ARM64 Steam client and writes the launcher and settings entry. |
+| `steam-anland` (written by `tui/install-steam.sh`) | Linux container | Steam launcher wrapper: unifies the libpng preload and falls back to llvmpipe when no KMS node exists. |
+| `steam-open-settings` (written by `tui/install-steam.sh`) | Linux container | Opens Steam Settings through the URL handler, avoiding window managers that implement no EWMH. |
+| `tui/anland-osk.c` | RootFS build environment | On-screen keyboard source; compiled in place by `tui/install-steam.sh` for X11 clients that can never reach the Android IME. |
+| `steam-osk` (written by `tui/install-steam.sh`) | Linux container | Toggles that on-screen keyboard. |
 | `tui/install-anland-kde.sh` | ARM64 Linux container | Installs Anland patched KWin/Xwayland Release packages and locks them. |
 | `tui/install-anland-gnome.sh` | ARM64 Debian/Ubuntu/Fedora/Arch container | Installs Anland patched Mutter Release packages and locks them. |
 | `tui/install-anland-next.sh` | ARM64 Debian/Ubuntu/Fedora/Arch container | Installs the Anland Next session package (mini-wm + patched Xwayland + patched bubblewrap). |
