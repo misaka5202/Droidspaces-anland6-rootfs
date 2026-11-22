@@ -300,6 +300,60 @@ else
     log "    FEX rootfs not extracted; Steam will download on first game launch"
 fi
 
+# ---------- 5b. Client runtime libraries ----------
+log "==> Step 5b: Client runtime libraries"
+#
+# The client links a desktop stack that a slim container image does not carry.
+# Each missing piece fails differently: libgtk-x11-2.0 aborts steamui.so before
+# any window exists, libopenal is a link-time dependency of vgui2_s.so so that
+# module refuses to load even though no audio stream is open yet, libibus kills
+# steamwebhelper and the UI stays on the loading spinner, and libSDL2 only
+# breaks the GL capability probe.  Probe what the image lacks instead of
+# shipping one fixed list, so the same script works on Debian 12 and 13.
+_need_lib() { ldconfig -p 2>/dev/null | grep -q "$1"; }
+_MISSING=""
+_pick() { _need_lib "$1" || _MISSING="$_MISSING $2"; }
+_pick libgtk-x11-2.0.so.0     libgtk2.0-0t64
+_pick libnss3.so              libnss3
+_pick libXss.so.1             libxss1
+_pick libgbm.so.1             libgbm1
+_pick libasound.so.2          libasound2t64
+_pick libxkbcommon.so.0       libxkbcommon0
+_pick libdrm.so.2             libdrm2
+_pick libcups.so.2            libcups2t64
+_pick libatk-1.0.so.0         libatk1.0-0t64
+_pick libatk-bridge-2.0.so.0  libatk-bridge2.0-0t64
+_pick libpango-1.0.so.0       libpango-1.0-0
+_pick libcairo.so.2           libcairo2
+_pick libXcomposite.so.1      libxcomposite1
+_pick libXdamage.so.1         libxdamage1
+_pick libXrandr.so.2          libxrandr2
+_pick libXtst.so.6            libxtst6
+_pick libXi.so.6              libxi6
+_pick libXfixes.so.3          libxfixes3
+_pick libopenal.so.1          libopenal1
+_pick libibus-1.0.so.5        libibus-1.0-5
+_pick libSDL2-2.0.so.0        libsdl2-2.0-0
+unset -f _need_lib _pick 2>/dev/null || true
+if [ -n "$_MISSING" ]; then
+    if command -v apt-get >/dev/null 2>&1; then
+        log "    installing:$_MISSING"
+        apt-get update -qq >/dev/null 2>&1 || true
+        if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $_MISSING >/dev/null 2>&1; then
+            # Debian 13 renamed the time_t-sensitive packages with a t64 suffix;
+            # older archives only know the plain names.
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                $(echo "$_MISSING" | sed "s/t64//g") >/dev/null 2>&1 || true
+        fi
+        ldconfig 2>/dev/null || true
+    else
+        log "    apt-get unavailable; install these libraries manually:$_MISSING"
+    fi
+else
+    log "    all runtime libraries already present"
+fi
+unset _MISSING
+
 # ---------- 6. Desktop launcher + icon ----------
 log "==> Step 6: Desktop launcher + icon"
 
@@ -402,7 +456,11 @@ if [ -z "${VK_ICD_FILENAMES:-}" ]; then
 fi
 
 cd "$S/steamrtarm64" 2>/dev/null || exit 1
-exec ./steam -no-cef-sandbox -cef-disable-gpu -chromeosnopreallocate "$@"
+# anland reports the panel physical density.  On a phone-class panel (560 dpi)
+# the client lays out its logical surface at a fraction of the real size and
+# paints the UI into one corner, so pin the scale and let STEAM_DPI override it.
+exec ./steam -no-cef-sandbox -cef-disable-gpu -chromeosnopreallocate \
+    -forcedpi "${STEAM_DPI:-96}" "$@"
 STEAM_LAUNCHER_EOF
 
 sed -i "s|@STEAM_ROOT@|${STEAM_ROOT_RUNTIME}|g" "$STEAM_LAUNCHER"
