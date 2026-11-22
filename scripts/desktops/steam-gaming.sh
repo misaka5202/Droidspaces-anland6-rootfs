@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 # steam-gaming.sh — Steam Gaming desktop profile.
 #
-# Installs Valve ARM64 Steam client + FEX + game-grade system deps.
+# Installs Valve ARM64 Steam client + FEX + game-grade system deps, plus a
+# phone-friendly app set (browser, editor, e-reader, terminal, file manager).
 # Session is still anland-session (each window = one Android window);
-# Steam is launched via desktop file / anland-shell APP.
+# Steam is launched via desktop file / the anland app page.
+#
+# The app set is chosen Wayland-first on purpose: only Wayland-native clients
+# reach the Android IME through zwp_text_input and honour fractional-scale, so
+# epiphany/foot/gnome-text-editor stay crisp and typeable at any auto_scale
+# value. X11 clients (Steam included) never get the IME and need anland-osk.
 #
 # Windows games run through Proton (Valve ARM64 Proton, auto-downloaded on first use)
 # + Turnip (Vulkan, Adreno) or libhybris (Mali).
@@ -63,7 +69,8 @@ install_apt() {
                 squashfs-tools \
                 pipewire pipewire-alsa pipewire-pulse wireplumber \
                 fonts-noto-cjk fonts-noto-color-emoji \
-                ca-certificates bash-completion
+                ca-certificates bash-completion \
+                epiphany-browser gnome-text-editor foliate foot nautilus
             ;;
         ubuntu:26.04)
             apt-get install -y --no-install-recommends \
@@ -71,7 +78,8 @@ install_apt() {
                 squashfs-tools \
                 pipewire pipewire-alsa pipewire-pulse wireplumber \
                 fonts-noto-cjk fonts-noto-color-emoji \
-                ca-certificates bash-completion language-pack-zh-hans
+                ca-certificates bash-completion language-pack-zh-hans \
+                epiphany-browser gnome-text-editor foliate foot nautilus
             ;;
         *)
             echo "Steam Gaming apt unsupported: $ID $VERSION_ID" >&2
@@ -89,7 +97,8 @@ install_fedora() {
         squashfs-tools \
         pipewire pipewire-alsa pipewire-pulseaudio wireplumber \
         google-noto-cjk-fonts google-noto-emoji-color-fonts \
-        ca-certificates bash-completion glibc-langpack-zh
+        ca-certificates bash-completion glibc-langpack-zh \
+        epiphany gnome-text-editor foliate foot nautilus
 }
 
 install_arch() {
@@ -98,7 +107,8 @@ install_arch() {
         squashfs-tools \
         pipewire pipewire-alsa pipewire-pulse wireplumber \
         noto-fonts-cjk noto-fonts-emoji \
-        ca-certificates bash-completion
+        ca-certificates bash-completion \
+        epiphany gnome-text-editor foliate foot nautilus
 }
 
 install_profile() {
