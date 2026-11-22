@@ -30,7 +30,6 @@ COPY scripts/install-usb-manager.sh /usr/local/sbin/install-droidspaces-usb-mana
 COPY scripts/systemd257.sh /usr/local/sbin/systemd257
 COPY scripts/tui/install-anland-next.sh /usr/local/sbin/install-anland-next
 COPY scripts/tui/install-anland6.sh /usr/local/sbin/install-anland6
-COPY scripts/configure-anland6-env.sh /usr/local/sbin/configure-anland6-env
 COPY scripts/tui/install-mesa.sh /usr/local/sbin/install-mesa
 COPY scripts/tui/configure-gpu.sh /usr/local/sbin/configure-gpu
 COPY scripts/tui/install-hangover-wine.sh /usr/local/sbin/install-hangover-wine
@@ -75,7 +74,7 @@ RUN echo '%_install_langs all' > /etc/rpm/macros.image-language-conf && \
     echo "fastestmirror=True" >> /etc/dnf/dnf.conf && \
     echo "defaultyes=True" >> /etc/dnf/dnf.conf
 
-RUN chmod +x /usr/local/sbin/install-anland-next /usr/local/sbin/install-anland6 /usr/local/sbin/configure-anland6-env /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-panvk /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
+RUN chmod +x /usr/local/sbin/install-anland-next /usr/local/sbin/install-anland6 /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-panvk /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
     ln -s droidspaces-tui /usr/local/bin/dstui && \
     ln -s droidspaces-tui /usr/local/bin/ds-tui && \
     dnf install -y --setopt=install_weak_deps=False \
@@ -220,10 +219,6 @@ EOF
         "$DISPLAY_BACKEND" "${ENABLE_mesa_ARG:-false}"
     echo 'export XDG_RUNTIME_DIR=/run/user/$(id -u)' >> /home/${USERNAME}/.bashrc
     /usr/local/sbin/configure-desktop "$DESKTOP" "$DISPLAY_BACKEND" "$DESKTOP_AUTOSTART" "$USERNAME"
-    # 6.x：configure-desktop 按 5.x 写了 /etc/environment（ANLAND_SOCKET、
-    # WAYLAND_DISPLAY=wayland-0 等），这里清掉；应用环境交给会话的
-    # ~/.anlandx-env。不是 6.x 时这个脚本什么都不做。
-    /usr/local/sbin/configure-anland6-env
     rm -rf /tmp/droidspaces-start
 EOF_RUN
 

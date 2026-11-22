@@ -15,18 +15,8 @@ configure_environment() {
             ;;
         anland-wayland)
             assignments+=(
-                WAYLAND_DISPLAY=wayland-0
                 QT_QPA_PLATFORM=wayland
-                ANLAND=1
-                ANLAND_SOCKET=/run/display.sock
-                ANLAND_DRM_DEVICE=/dev/dri/renderD128
-                ANLAND_SKIP_IMPLICIT_SYNC_WAIT=1
             )
-            case "$ID" in
-                arch|archarm|archlinux)
-                    assignments+=(XWAYLAND_GBM_DEVICE=/dev/dri/renderD128)
-                    ;;
-            esac
             ;;
         *)
             echo "KDE 显示后端无效：$backend" >&2

@@ -17,9 +17,6 @@ configure_environment() {
         WAYLAND_DISPLAY=wayland-anland
         GNOME_WAYLAND_DISPLAY=wayland-anland
         QT_QPA_PLATFORM=wayland
-        ANLAND=1
-        ANLAND_SOCKET=/run/display.sock
-        ANLAND_DRM_DEVICE=/dev/dri/renderD128
     )
 
     [[ "$backend" == anland-wayland ]] || {

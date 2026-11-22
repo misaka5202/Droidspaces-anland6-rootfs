@@ -14,12 +14,6 @@ configure_environment() {
         XDG_SESSION_CLASS=user
         XDG_SESSION_TYPE=wayland
         QT_QPA_PLATFORM=wayland
-        ANLAND=1
-        ANLAND_PRESENT_BACKEND=legacy
-        ANLAND_SOCKET=/run/display.sock
-        ANLAND_DRM_DEVICE=/dev/dri/renderD128
-        ANLAND_SKIP_IMPLICIT_SYNC_WAIT=1
-        XWAYLAND_GBM_DEVICE=/dev/dri/renderD128
         MESA_LOADER_DRIVER_OVERRIDE=kgsl
         GALLIUM_DRIVER=kgsl
         FD_FORCE_KGSL=1

@@ -20,23 +20,13 @@ configure_environment() {
     local -a assignments=(
         XDG_SESSION_CLASS=user
         XCURSOR_SIZE=48
-        WAYLAND_DISPLAY=wayland-0
         QT_QPA_PLATFORM=wayland
-        ANLAND=1
-        ANLAND_SOCKET=/run/display.sock
-        ANLAND_DRM_DEVICE=/dev/dri/renderD128
-        ANLAND_SKIP_IMPLICIT_SYNC_WAIT=1
     )
 
     [[ "$backend" == anland-wayland ]] || {
         echo "KDE mobile 显示后端无效：$backend" >&2
         return 1
     }
-    case "$ID" in
-        arch|archarm|archlinux)
-            assignments+=(XWAYLAND_GBM_DEVICE=/dev/dri/renderD128)
-            ;;
-    esac
 
     touch "$environment_file"
     for assignment in "${assignments[@]}"; do

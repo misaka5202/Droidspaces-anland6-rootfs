@@ -47,7 +47,6 @@ COPY scripts/bashrc.sh /etc/profile.d/ds-aliases.sh
 COPY scripts/install-usb-manager.sh /usr/local/sbin/install-droidspaces-usb-manager
 COPY scripts/tui/install-anland-next.sh /usr/local/sbin/install-anland-next
 COPY scripts/tui/install-anland6.sh /usr/local/sbin/install-anland6
-COPY scripts/configure-anland6-env.sh /usr/local/sbin/configure-anland6-env
 COPY scripts/tui/install-mesa.sh /usr/local/sbin/install-mesa
 COPY scripts/tui/configure-gpu.sh /usr/local/sbin/configure-gpu
 COPY scripts/tui/install-hangover-wine.sh /usr/local/sbin/install-hangover-wine
@@ -260,10 +259,6 @@ fi
     printf 'd /run/user/%s 0700 %s %s -
 ' "$(id -u ${USERNAME})" "${USERNAME}" "${USERNAME}" > /etc/tmpfiles.d/anland-session.conf
     /usr/local/sbin/configure-desktop "$DESKTOP" "$DISPLAY_BACKEND" "$DESKTOP_AUTOSTART" "$USERNAME"
-    # 6.x：configure-desktop 按 5.x 写了 /etc/environment（ANLAND_SOCKET、
-    # WAYLAND_DISPLAY=wayland-0 等），这里清掉；应用环境交给会话的
-    # ~/.anlandx-env。不是 6.x 时这个脚本什么都不做。
-    /usr/local/sbin/configure-anland6-env
     rm -rf /tmp/droidspaces-start
 EOF_RUN
 
