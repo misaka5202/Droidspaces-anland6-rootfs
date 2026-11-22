@@ -232,21 +232,36 @@ build_libhybris() {
     fi
 
     in_target "
+        # 编译依赖按发行版自装：构建镜像的基础包里没有 autotools，而这段
+        # 在 Debian/Ubuntu/Fedora/Arch 四系镜像里都会跑。
         export DEBIAN_FRONTEND=noninteractive
-        apt-get install -y -q autoconf automake autopoint libtool pkg-config build-essential git \
-            libwayland-dev libwayland-egl-backend-dev wayland-protocols libegl-dev libgles-dev \
-            libdrm-dev libvulkan-dev libgbm-dev >/dev/null 2>&1 || true
+        if command -v apt-get >/dev/null 2>&1; then
+            apt-get install -y -q autoconf automake autopoint libtool pkg-config build-essential git \
+                libwayland-dev libwayland-egl-backend-dev wayland-protocols libegl-dev libgles-dev \
+                libdrm-dev libvulkan-dev libgbm-dev >/dev/null 2>&1 || true
+        elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y -q autoconf automake libtool pkgconf-pkg-config gcc gcc-c++ make git \
+                libwayland-devel wayland-devel wayland-protocols-devel \
+                mesa-libEGL-devel mesa-libGLES-devel libdrm-devel mesa-vulkan-devel mesa-libgbm-devel >/dev/null 2>&1 || true
+        elif command -v pacman >/dev/null 2>&1; then
+            pacman -S --noconfirm --needed base-devel git wayland wayland-protocols \
+                libglvnd libdrm mesa >/dev/null 2>&1 || true
+        fi
         mkdir -p $HY_ROOT && cd $HY_ROOT
         [ -d android-headers ] || git clone --depth 1 -b herrie/halium-14.0 https://github.com/Halium/android-headers >/dev/null 2>&1
         [ -d dhy ] || git clone --depth 1 -b feature/mali-desktop https://github.com/ravindu644/libhybris dhy >/dev/null 2>&1
         cd $HY_ROOT/dhy/hybris || exit 1
-        ./autogen.sh >/dev/null 2>&1
-        ./configure --prefix=$HY_ROOT/inst --enable-arch=arm64 --enable-wayland --enable-lindroid-drm \
-            --enable-mali-quirks --enable-debug --enable-property-cache=no \
-            --with-android-headers=$HY_ROOT/android-headers \
-            --with-default-hybris-ld-library-path=/vendor/lib64/egl:/vendor/lib64:/system/lib64:/apex/$VNDK/lib64 >/dev/null 2>&1
-        make -j\"\$(nproc)\" CFLAGS='-O1 -g -DDEBUG' CXXFLAGS='-O1 -g -DDEBUG' >/dev/null 2>&1 || true
-        make -k install >/dev/null 2>&1 || true
+        # autotools 三步的输出全部留档：失败时 RUN 会继续走到 configure-gpu 的
+        # 软渲染回退，构建看起来仍然全绿——有日志才能事后追因。
+        {
+            ./autogen.sh
+            ./configure --prefix=$HY_ROOT/inst --enable-arch=arm64 --enable-wayland --enable-lindroid-drm \
+                --enable-mali-quirks --enable-debug --enable-property-cache=no \
+                --with-android-headers=$HY_ROOT/android-headers \
+                --with-default-hybris-ld-library-path=/vendor/lib64/egl:/vendor/lib64:/system/lib64:/apex/$VNDK/lib64
+            make -j\"\$(nproc)\" CFLAGS='-O1 -g -DDEBUG' CXXFLAGS='-O1 -g -DDEBUG'
+            make -k install
+        } > $HY_ROOT/build.log 2>&1 || true
         for f in $HY_ROOT/dhy/hybris/egl/platforms/*/.libs/eglplatform_*.so; do
             [ -e \"\$f\" ] && cp -f \"\$f\" $HY_ROOT/inst/lib/
         done
@@ -254,7 +269,11 @@ build_libhybris() {
             [ -e \"\$f\" ] && cp -f \"\$f\" $HY_ROOT/inst/lib/
         done
         test -e $HY_ROOT/inst/lib/libEGL.so
-    " || { warn "libhybris 构建失败，检查容器内 $HY_ROOT/dhy/hybris 的 make 输出"; return 1; }
+    " || {
+        warn "libhybris 构建失败，$HY_ROOT/build.log 尾部："
+        tail -40 $HY_ROOT/build.log 2>/dev/null | sed 's/^/    /' >&2 || true
+        return 1
+    }
 
     ok "libhybris 已就绪: $HY_ROOT/inst/lib"
 }
