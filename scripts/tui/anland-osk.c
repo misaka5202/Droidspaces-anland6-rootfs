@@ -250,23 +250,66 @@ static void settle_screen(void) {
     }
 }
 
+/* The band has to sit inside the OWNER's rect, not the screen's.
+ *
+ * mini-wm adopts the band by re-parenting it into the owner toplevel, and the
+ * renderer composites that toplevel's area only.  At zoom 100 % the owner
+ * fills the screen and both agree — but the daemon can apply a zoom factor
+ * (#31; auto_scale on a phone panel asks for 350 %), and the owner is then
+ * phys×100/zoom (361x794 inside a 1264x2780 screen).  A screen-anchored band
+ * lands entirely outside the composited rect: the process stays alive and the
+ * window is still IsViewable, yet no pixel reaches the screen.  Deriving the
+ * band from the owner makes every zoom factor behave the same. */
+static int owner_rect(int* ox, int* oy, int* ow, int* oh) {
+    if (!owner) return 0;
+    Window r;
+    int x = 0, y = 0;
+    unsigned w = 0, h = 0, bw = 0, d = 0;
+    if (!XGetGeometry(dpy, owner, &r, &x, &y, &w, &h, &bw, &d)) return 0;
+    if ((int)w < 64 || (int)h < 64) return 0;
+    *ox = x; *oy = y; *ow = (int)w; *oh = (int)h;
+    return 1;
+}
+
+/* Place the band along the bottom edge of the owner (root coordinates: the
+ * band is still a child of root when this runs, and mini-wm's adoption keeps
+ * the absolute position).  No owner yet → the screen bottom, as before. */
+static void place_in_owner(void) {
+    int ox = 0, oy = 0, ow = 0, oh = 0;
+    if (!owner_rect(&ox, &oy, &ow, &oh)) {
+        int sw = 0, sh = 0;
+        screen_size(&sw, &sh);
+        if (sw <= 0 || sh <= 0) return;
+        W = sw;
+        H = sh * 42 / 100;
+        XMoveResizeWindow(dpy, win, 0, sh - H, W, H);
+        fprintf(stderr, "anland-osk: band %dx%d at 0,%d (no owner)\n", W, H, sh - H);
+        return;
+    }
+    W = ow;
+    H = oh * 42 / 100;
+    if (H < 120) H = 120;
+    if (H > oh) H = oh;
+    XMoveResizeWindow(dpy, win, ox, oy + oh - H, W, H);
+    fprintf(stderr, "anland-osk: band %dx%d at %d,%d (owner %dx%d)\n",
+            W, H, ox, oy + oh - H, ow, oh);
+}
+
 /* Re-place the band after the output size changed: back onto the root first,
  * because a reparented child would otherwise be positioned in owner space. */
 static void reparks(void) {
     int sw = 0, sh = 0;
     screen_size(&sw, &sh);
     if (sw <= 0 || sh <= 0) return;
-    W = sw;
-    H = sh * 42 / 100;
     XUnmapWindow(dpy, win);
-    XReparentWindow(dpy, win, root, 0, sh - H);
-    XResizeWindow(dpy, win, W, H);
+    XReparentWindow(dpy, win, root, 0, 0);
     if (owner) XSetTransientForHint(dpy, win, owner);
+    place_in_owner();
     XMapRaised(dpy, win);
     XFlush(dpy);
     layout();
     draw();
-    fprintf(stderr, "anland-osk: re-parked at 0,%d %dx%d\n", sh - H, W, H);
+    fprintf(stderr, "anland-osk: re-parked %dx%d\n", W, H);
 }
 
 /* Steam is a CEF app: a single toplevel holding full-size child windows.
@@ -290,8 +333,11 @@ static void attach(Window target) {
     owner = target;
     XUnmapWindow(dpy, win);
     XSetTransientForHint(dpy, win, owner);
+    place_in_owner();      /* band follows the owner, not the screen (zoom) */
     XMapRaised(dpy, win);
     XFlush(dpy);
+    layout();
+    draw();
 }
 
 static void anchor(Window target) {
