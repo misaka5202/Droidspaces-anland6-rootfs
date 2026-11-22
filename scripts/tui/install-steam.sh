@@ -77,26 +77,46 @@ STEAM_SETTINGS_HELPER="${BIN_DIR}/steam-open-settings"
 # Path as the client sees it from inside the container: the launcher is written
 # into the image, where ROOTFS_DIR is not part of the path.
 STEAM_ROOT_RUNTIME="/home/${STEAM_USER}/.local/share/Steam"
-TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
+TMP_CREATED=0
+if [[ -n "${INSTALL_TMP_DIR:-}" ]]; then
+    # Reuse a caller-provided directory so an aborted run keeps its partial
+    # depot files; the client download is large enough that a full restart
+    # from zero is not acceptable.
+    TMP_DIR="$INSTALL_TMP_DIR"
+    mkdir -p "$TMP_DIR"
+else
+    TMP_DIR="$(mktemp -d)"
+    TMP_CREATED=1
+fi
+trap '[[ "$TMP_CREATED" -eq 1 ]] && rm -rf "$TMP_DIR"' EXIT
 
 # ---------- helpers ----------
 log() { printf '[install-steam] %s\n' "$*"; }
 die() { printf '[install-steam] ERROR: %s\n' "$*" >&2; exit 1; }
 
 download() {
-    # Resumable download with retries.  The Valve CDN drops long-lived TLS
-    # connections mid-transfer, so a single curl invocation cannot be trusted
-    # for the multi-hundred-MB client depot: resume (-C -) from what already
-    # landed and retry until the file is complete.
+    # Fetch one depot file.  The Valve CDN throttles and drops single-stream
+    # transfers on many mobile links while parallel byte ranges still sum up,
+    # so aria2c is preferred and a resuming curl is the fallback.
     local url="$1" output="$2" attempt=1 max_attempts="${DOWNLOAD_MAX_ATTEMPTS:-12}"
+    local dir base
+    dir="$(dirname "$output")"
+    base="$(basename "$output")"
     while [ "$attempt" -le "$max_attempts" ]; do
-        if curl -fsSL --connect-timeout 30 --max-time 900 \
+        if command -v aria2c >/dev/null 2>&1; then
+            if aria2c -x16 -s16 -k1M --min-split-size=1M \
+                    --file-allocation=none --allow-overwrite=true \
+                    --auto-file-renaming=false --continue=true \
+                    --console-log-level=error --summary-interval=0 \
+                    -d "$dir" -o "$base" "$url"; then
+                return 0
+            fi
+        elif curl -fsSL -4 --connect-timeout 30 --max-time 900 \
                 --speed-limit 1024 --speed-time 60 \
                 -C - -o "$output" "$url"; then
             return 0
         fi
-        log "    download interrupted (attempt ${attempt}/${max_attempts}), resuming: $(basename "$output")"
+        log "    download interrupted (attempt ${attempt}/${max_attempts}), resuming: $base"
         sleep $(( attempt < 4 ? attempt * 3 : 10 ))
         attempt=$(( attempt + 1 ))
     done
