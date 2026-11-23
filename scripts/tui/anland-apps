@@ -34,6 +34,11 @@ user_home() {
     printf '%s' "${home:-/root}"
 }
 ENVF="$(user_home)/.anlandx-env"
+# X11 display number, written by the session as a separate one-liner (the env
+# file above carries only the wayland/meson variables). Applications that fall
+# back to X11 — Qt's wayland plugin does not initialise on every GPU path —
+# need DISPLAY, and without it they abort with "could not connect to display".
+XDISPLAY_FILE="$(user_home)/.anlandx"
 
 die() { printf '%s\n' "$*" >&2; exit 1; }
 
@@ -126,6 +131,18 @@ elif [ -z "${WAYLAND_DISPLAY:-}" ]; then
     die "no session environment (is the anland session running?)"
 fi
 
+# X11 fallback: the session publishes the display number in ~/.anlandx, not in
+# the env file. Export it so toolkits that give up on wayland (Qt's plugin does
+# on this GPU path) can still reach Xwayland.
+if [ -z "${DISPLAY:-}" ] && [ -r "$XDISPLAY_FILE" ]; then
+    xdisp=$(head -1 "$XDISPLAY_FILE" 2>/dev/null | tr -d '[:space:]')
+    case "$xdisp" in
+        # the file already holds the screen number with its colon (":1")
+        :[0-9]*) DISPLAY="$xdisp"; export DISPLAY ;;
+        [0-9]*)  DISPLAY=":$xdisp"; export DISPLAY ;;
+    esac
+fi
+
 # Hand the process to the systemd user manager rather than detaching it with
 # setsid: `droidspaces run` tears down the process tree it created, so a
 # backgrounded client is killed the moment this helper returns — the shortcut
@@ -162,6 +179,7 @@ systemd-run --user --quiet --unit "$LAUNCH_UNIT" \
     --setenv="DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-}" \
     --setenv="PULSE_SERVER=${PULSE_SERVER:-}" \
     --setenv="PATH=${PATH:-/usr/local/bin:/usr/bin:/bin}" \
+    --setenv="DISPLAY=${DISPLAY:-}" \
     --setenv="QT_QPA_PLATFORM=wayland" \
     --setenv="GDK_BACKEND=wayland" \
     --setenv="SDL_VIDEODRIVER=wayland" \
