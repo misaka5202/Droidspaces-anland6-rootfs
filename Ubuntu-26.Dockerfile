@@ -27,12 +27,17 @@ ARG ANLAND6_XWAYLAND=0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 启用 APT 并行连接、HTTP(S) pipeline 和下载重试
+# 启用 APT 并行连接与下载重试。
+# 不启用 http pipeline：24.04/26.04 的官方源对深 pipeline 支持不稳，实测会在
+# archive.ubuntu.com 上返回 "Failed to fetch"（重试 4800 秒后仍失败）。同时显式
+# 设置超时，让失败的请求尽快返回并重试，而不是长时间挂在一个连接上。
 RUN printf '%s\n' \
     'Acquire::Queue-Mode "host";' \
-    'Acquire::http::Pipeline-Depth "10";' \
-    'Acquire::https::Pipeline-Depth "10";' \
-    'Acquire::Retries "3";' \
+    'Acquire::http::Pipeline-Depth "5";' \
+    'Acquire::https::Pipeline-Depth "5";' \
+    'Acquire::Retries "5";' \
+    'Acquire::http::Timeout "30";' \
+    'Acquire::https::Timeout "30";' \
     > /etc/apt/apt.conf.d/99parallel-downloads
 
 # 优先复制自定义脚本
