@@ -37,14 +37,22 @@ jobs:
 
       - name: Install build dependencies
         run: |
+          set -uo pipefail
           sudo apt-get update
+          # Required for a Vulkan-only freedreno build.
           sudo apt-get install -y --no-install-recommends \
             build-essential meson ninja-build pkg-config python3-pip \
             bison flex libdrm-dev libexpat1-dev libzstd-dev zlib1g-dev \
-            libx11-dev libx11-xcb-dev libxcb1-dev libxcb-dri3-dev \
-            libxcb-present-dev libxcb-shm-dev libxcb-randr0-dev \
-            libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev \
             libwayland-dev libelf-dev glslang-tools python3-mako
+          # Optional: only needed if Turnip pulls these WSI paths in. Installed
+          # one by one because distro spellings differ (libxcb-shm0-dev, not
+          # libxcb-shm-dev) and a single wrong name must not fail the whole job.
+          for p in libx11-dev libx11-xcb-dev libxcb1-dev libxcb-dri3-dev \
+                   libxcb-present-dev libxcb-shm0-dev libxcb-randr0-dev \
+                   libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev; do
+            sudo apt-get install -y --no-install-recommends "$p" \
+              || echo "::warning::optional package unavailable: $p"
+          done
           pip3 install --break-system-packages mako pyyaml
 
       - name: Clone Mesa
