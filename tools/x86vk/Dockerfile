@@ -6,6 +6,21 @@
 # only Vulkan ICD it can load must therefore also be x86_64 — while the GPU is
 # driven by aarch64 kernel interfaces.
 #
+# Deliberately carries NO aarch64 graphics stack. Box64 wraps a native library
+# in preference to the emulated one whenever it can find it, and the distro's
+# aarch64 libxcb/libwayland/X11 are older than what Arch's Turnip 26.x links
+# against — a device run failed on exactly that:
+#
+#   Global Symbol xcb_dri3_import_syncobj_checked not found
+#   Global Symbol wl_display_create_queue_with_name not found
+#
+# Box64 has no per-library "do not wrap" switch in 0.3.8 (BOX64_NOWRAP does not
+# exist there; BOX64_PREFER_WRAPPED=0 does not override the built-in list), so
+# the reliable way to make it use the emulated libraries is to not ship native
+# ones. This image therefore has no mesa-vulkan-drivers, no libxcb, no
+# libwayland and no libX11 on the aarch64 side: the only graphics stack present
+# is the x86_64 one under /opt/x86root, which is what the probe needs.
+#
 # Layout of the interesting part:
 #   /usr/bin/box64        the translator (native aarch64, from Ubuntu universe)
 #   /opt/x86root          a native x86_64 Arch userspace carrying
@@ -18,18 +33,17 @@ FROM --platform=linux/arm64 ubuntu:26.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# box64, an init, and the two archivers. Nothing that owns a GPU.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         box64 \
         ca-certificates \
-        mesa-vulkan-drivers \
         systemd-sysv \
         tar \
-        vulkan-tools \
         zstd \
     && rm -rf /var/lib/apt/lists/*
 
 # Built by the workflow: Arch bootstrap + vulkan-freedreno (x86_64 Turnip)
-# + vulkan-tools (x86_64 vulkaninfo) + mesa, packed as root.x86_64/.
+# + vulkan-tools (x86_64 vulkaninfo) + every library Turnip links against.
 COPY x86root.tar.zst /opt/x86root.tar.zst
 RUN tar --zstd -xf /opt/x86root.tar.zst -C /opt \
     && mv /opt/root.x86_64 /opt/x86root \

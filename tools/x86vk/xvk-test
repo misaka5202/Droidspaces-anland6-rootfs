@@ -2,109 +2,104 @@
 # xvk-test — answer one question on the device: can an x86_64 Vulkan client
 # drive kgsl through Box64?
 #
-# Three probes, in order, each narrowing the failure if the next one breaks:
-#   1. aarch64 baseline — Turnip must see the GPU at all (already known good on
-#      our images; a failure here means the container lost its GPU nodes)
-#   2. box64 smoke — a trivial x86_64 binary must run at all
-#   3. x86_64 Vulkan — the real question: does the x86_64 Turnip create a
-#      device against /dev/kgsl-3d0 / /dev/dri/renderD*
+# The image ships no aarch64 graphics stack on purpose (see the Dockerfile), so
+# the probes check that precondition first and then run the real one. Written
+# for /bin/sh; no bash-isms.
 #
-# Exit status is the number of failed probes, so CI/user scripts can gate on it.
+# Exit status is the number of failed probes, so a caller can gate on it.
 set -u
 
 ROOT=${X86ROOT:-/opt/x86root}
-TRIPLE=x86_64-pc-linux-gnu
+LOG=${XVK_LOG:-/tmp/xvk}
 
 fail=0
 say() { printf '\n=== %s\n' "$*"; }
+ok()  { printf 'RESULT: PASS (%s)\n' "$*"; }
+bad() { printf 'RESULT: FAIL (%s)\n' "$*"; fail=$((fail + 1)); }
 
 say "environment"
-echo "arch        : $(uname -m)"
-echo "kernel      : $(uname -r)"
-echo "x86root     : $ROOT ($(test -d "$ROOT" && echo present || echo MISSING))"
-echo "box64       : $(command -v box64 || echo MISSING)"
+echo "arch          : $(uname -m)"
+echo "kernel        : $(uname -r)"
+echo "x86root       : $ROOT"
+echo "box64         : $(command -v box64 || echo MISSING)"
 for n in /dev/kgsl-3d0 /dev/dri/renderD128 /dev/dri/card0; do
-    if [ -e "$n" ]; then echo "gpu node    : $n present"; else echo "gpu node    : $n absent"; fi
+    if [ -e "$n" ]; then echo "gpu node      : $n present"; else echo "gpu node      : $n absent"; fi
 done
-echo "aarch64 icd : $(ls /usr/share/vulkan/icd.d/freedreno_icd*.json 2>/dev/null | tr '\n' ' ')"
-echo "x86_64 icd  : $(ls "$ROOT"/usr/share/vulkan/icd.d/freedreno_icd.json 2>/dev/null || echo MISSING)"
-echo "x86_64 turnip: $(ls "$ROOT"/usr/lib/libvulkan_freedreno.so 2>/dev/null || echo MISSING)"
+echo "x86_64 turnip : $(ls "$ROOT"/usr/lib/libvulkan_freedreno.so 2>/dev/null || echo MISSING)"
+# Arch installs the loader flat in usr/lib; a Debian/Ubuntu amd64 package puts it
+# under usr/lib/x86_64-linux-gnu. Report whichever this tree carries.
+echo "x86_64 loader : $(ls "$ROOT"/usr/lib/libvulkan.so.1 "$ROOT"/usr/lib/x86_64-linux-gnu/libvulkan.so.1 2>/dev/null | head -1 || echo MISSING)"
+echo "x86_64 icd    : $(ls "$ROOT"/usr/share/vulkan/icd.d/freedreno_icd.json 2>/dev/null || echo MISSING)"
 
 # ---------------------------------------------------------------------------
-say "probe 1/3: aarch64 Vulkan baseline"
-if command -v vulkaninfo >/dev/null 2>&1; then
-    vulkaninfo --summary 2>&1 | grep -iE 'deviceName|driverName|apiVersion' | head -6
-    if vulkaninfo --summary 2>&1 | grep -qi 'Turnip'; then
-        echo "RESULT: PASS (aarch64 Turnip sees the GPU)"
-    else
-        echo "RESULT: FAIL (no Turnip device on the aarch64 side)"
-        fail=$((fail + 1))
-    fi
+# Precondition, not a baseline: Box64 prefers to wrap a native library over the
+# emulated one, and the distro's aarch64 libxcb/libwayland are older than what
+# Turnip 26.x links against. A device run failed on exactly that:
+#   Global Symbol xcb_dri3_import_syncobj_checked not found
+#   Global Symbol wl_display_create_queue_with_name not found
+# Box64 0.3.8 has no per-library "do not wrap" switch, so this image ships no
+# native graphics libraries at all. If one appears here, the probe is measuring
+# the wrong thing.
+say "probe 1/3: no aarch64 graphics stack (precondition)"
+native=""
+for lib in libvulkan.so.1 libvulkan_freedreno.so libxcb.so.1 \
+           libwayland-client.so.0 libX11.so.6; do
+    hit=$(find /usr/lib /lib -maxdepth 3 -name "$lib" 2>/dev/null | head -1)
+    [ -n "$hit" ] && native="$native $hit"
+done
+if [ -z "$native" ]; then
+    ok "no native graphics libraries box64 could wrap"
 else
-    echo "RESULT: SKIP (no aarch64 vulkaninfo in this image)"
+    bad "native graphics libraries present, box64 will wrap them:$native"
 fi
 
 # ---------------------------------------------------------------------------
-say "probe 2/3: box64 smoke test"
-if [ ! -x /usr/bin/box64 ]; then
-    echo "RESULT: FAIL (box64 missing)"
-    fail=$((fail + 1))
-elif [ ! -x "$ROOT/usr/bin/true" ]; then
-    echo "RESULT: FAIL ($ROOT/usr/bin/true missing — x86_64 tree not unpacked)"
-    fail=$((fail + 1))
+say "probe 2/3: box64 runs an x86_64 binary"
+if [ ! -x "$ROOT/usr/bin/true" ]; then
+    bad "$ROOT/usr/bin/true missing — x86_64 tree not unpacked"
+elif BOX64_LOG=0 BOX64_LD_LIBRARY_PATH="$ROOT/usr/lib:$ROOT/usr/lib/x86_64-linux-gnu" \
+        box64 "$ROOT/usr/bin/true" >/dev/null 2>&1; then
+    ok "x86_64 binary ran under box64"
 else
-    if BOX64_LOG=0 BOX64_LD_LIBRARY_PATH="$ROOT/usr/lib:$ROOT/lib" \
-           box64 "$ROOT/usr/bin/true" 2>&1 | tail -3; then
-        echo "RESULT: PASS (x86_64 binary ran under box64)"
-    else
-        echo "RESULT: FAIL (x86_64 binary did not run)"
-        fail=$((fail + 1))
-    fi
+    bad "x86_64 binary did not run under box64"
 fi
 
 # ---------------------------------------------------------------------------
 say "probe 3/3: x86_64 Vulkan against kgsl (the question)"
 if [ ! -x "$ROOT/usr/bin/vulkaninfo" ]; then
-    echo "RESULT: FAIL ($ROOT/usr/bin/vulkaninfo missing — install vulkan-tools x86_64)"
-    fail=$((fail + 1))
+    bad "$ROOT/usr/bin/vulkaninfo missing — install vulkan-tools into x86root"
 else
-    # Write an ICD with an absolute library_path: the packaged json names the
-    # library relatively, and the x86_64 loader would otherwise search host
-    # (aarch64) paths for it.
-    icd_dir=/run/xvk
-    mkdir -p "$icd_dir"
+    mkdir -p "$LOG"
+    # The packaged json names the library relatively; give the x86_64 loader an
+    # absolute path so it cannot resolve the ICD against host (aarch64) dirs.
     if [ -f "$ROOT/usr/share/vulkan/icd.d/freedreno_icd.json" ]; then
         sed "s|\"library_path\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"library_path\": \"$ROOT/usr/lib/libvulkan_freedreno.so\"|" \
-            "$ROOT/usr/share/vulkan/icd.d/freedreno_icd.json" > "$icd_dir/freedreno_icd.json"
-        echo "icd rewritten -> $icd_dir/freedreno_icd.json"
-        sed -n '1,12p' "$icd_dir/freedreno_icd.json"
+            "$ROOT/usr/share/vulkan/icd.d/freedreno_icd.json" > "$LOG/freedreno_icd.json"
     else
-        echo "RESULT: FAIL (no freedreno_icd.json in the x86_64 tree)"
-        fail=$((fail + 1))
-        icd_dir=
+        bad "no freedreno_icd.json in the x86_64 tree"
     fi
 
-    if [ -n "$icd_dir" ]; then
-        echo "--- running x86_64 vulkaninfo under box64 ---"
-        out=$(
-            BOX64_LOG=1 \
-            BOX64_LD_LIBRARY_PATH="$ROOT/usr/lib:$ROOT/lib" \
-            VK_ICD_FILENAMES="$icd_dir/freedreno_icd.json" \
-            VK_DRIVER_FILES="$icd_dir/freedreno_icd.json" \
-            MESA_LOADER_DRIVER_OVERRIDE=kgsl \
-            box64 "$ROOT/usr/bin/vulkaninfo" --summary 2>&1
-        )
-        printf '%s\n' "$out" | grep -iE 'deviceName|driverName|apiVersion|ERROR|error|kgsl|freedreno' | head -25
-        if printf '%s\n' "$out" | grep -qi 'Turnip'; then
-            echo "RESULT: PASS — x86_64 Turnip created a device against the GPU"
-            echo "        This is the answer: Proton's DXVK path is viable here."
+    [ -f "$LOG/freedreno_icd.json" ] && {
+        BOX64_LOG=1 \
+        BOX64_LD_LIBRARY_PATH="$ROOT/usr/lib:$ROOT/usr/lib/x86_64-linux-gnu" \
+        VK_ICD_FILENAMES="$LOG/freedreno_icd.json" \
+        VK_DRIVER_FILES="$LOG/freedreno_icd.json" \
+        timeout 180 box64 "$ROOT/usr/bin/vulkaninfo" --summary > "$LOG/vulkaninfo.log" 2>&1
+        rc=$?
+
+        echo "--- which libvulkan box64 chose ---"
+        grep -i 'libvulkan' "$LOG/vulkaninfo.log" | head -4
+        echo "--- vulkaninfo output ---"
+        grep -viE '^\[BOX64\]' "$LOG/vulkaninfo.log" | tail -20
+
+        if grep -qi 'Turnip' "$LOG/vulkaninfo.log"; then
+            ok "x86_64 Turnip created a device against the GPU — DXVK is viable here"
+        elif grep -qi 'dlopen\|Global Symbol\|Unhandled signal' "$LOG/vulkaninfo.log"; then
+            bad "x86_64 Turnip loaded but failed on missing symbols (see $LOG/vulkaninfo.log)"
         else
-            echo "RESULT: FAIL — x86_64 Turnip did not create a device"
-            echo "        Full output above; check for a loader 'ERROR_INCOMPATIBLE_DRIVER'"
-            echo "        or a Mesa 'kgsl' open failure."
-            fail=$((fail + 1))
+            bad "x86_64 Turnip did not create a device (rc=$rc, see $LOG/vulkaninfo.log)"
         fi
-    fi
+    }
 fi
 
 say "summary"

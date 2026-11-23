@@ -92,13 +92,41 @@ jobs:
             pacman -Scc --noconfirm
           '
 
-          # Prove the pieces exist before shipping a 200 MB tarball.
+          # Prove the pieces exist before shipping a ~250 MB tarball. The loader
+          # path differs by provenance: Arch installs it flat in usr/lib, while a
+          # Debian/Ubuntu amd64 package puts it under usr/lib/x86_64-linux-gnu.
           for f in usr/lib/libvulkan_freedreno.so \
                    usr/share/vulkan/icd.d/freedreno_icd.json \
-                   usr/bin/vulkaninfo usr/lib/libvulkan.so.1 usr/bin/true; do
+                   usr/bin/vulkaninfo usr/bin/true; do
             test -e "$R/$f" || { echo "::error::$f missing after install"; exit 1; }
             echo "  ok  $f"
           done
+          if [ -e "$R/usr/lib/libvulkan.so.1" ]; then
+            echo "  ok  usr/lib/libvulkan.so.1"
+          elif [ -e "$R/usr/lib/x86_64-linux-gnu/libvulkan.so.1" ]; then
+            echo "  ok  usr/lib/x86_64-linux-gnu/libvulkan.so.1"
+          else
+            echo "::error::no x86_64 libvulkan.so.1 in the tree"; exit 1
+          fi
+
+          # Every library Turnip declares must resolve inside the tree. On the
+          # device this is what broke: a hand-assembled dependency set loaded
+          # the driver but died on missing symbols, so check it here where the
+          # failure is cheap. pacman resolves them, this just proves it did.
+          echo "-- dependency resolution for libvulkan_freedreno.so --"
+          missing=0
+          for lib in $(python3 tools/x86vk/elf-needed.py "$R/usr/lib/libvulkan_freedreno.so"); do
+            if find "$R/usr/lib" "$R/lib" -maxdepth 2 -name "$lib" 2>/dev/null | grep -q .; then
+              echo "  ok    $lib"
+            else
+              echo "  MISS  $lib"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ "$missing" -gt 0 ]; then
+            echo "::error::$missing libraries needed by libvulkan_freedreno.so are missing from the x86_64 tree"
+            exit 1
+          fi
 
           # Unmount before packing: an active bind mount would drag the runner's
           # /proc, /dev and /sys contents into the image.
