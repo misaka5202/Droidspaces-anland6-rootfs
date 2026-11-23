@@ -101,19 +101,27 @@ if command -v systemctl >/dev/null 2>&1; then
     fi
 fi
 
-# The session being 'active' does not mean its compositor connection is alive:
-# after the daemon restarts, the session keeps running against a dead socket and
-# every client it launches is a zombie with no window. Probe the socket by
-# opening it — with nobody listening the connect fails immediately — and restart
-# the session when it does.
+# The session must actually be running: it owns Xwayland, the wayland link and
+# the environment. Probing the daemon's socket is not enough — that socket stays
+# alive on its own, so a dead session looks healthy and every launch then gets a
+# stale (or missing) DISPLAY and produces no window.
+need_session=0
 if command -v systemctl >/dev/null 2>&1; then
+    [ "$(systemctl --user is-active anland-session 2>/dev/null)" = "active" ] || need_session=1
+    # ...and its compositor connection must work, not just its process exist:
+    # after the daemon restarts the session keeps running against a dead socket
+    # and every client it starts is a zombie with no window.
     wl_display=${WAYLAND_DISPLAY:-wayland-anland}
     sock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$wl_display"
     if [ -S "$sock" ] && ! ( exec 9<>"$sock" ) 2>/dev/null; then
-        printf 'anland-apps: display socket dead, restarting the session\n' >&2
-        systemctl --user restart anland-session >/dev/null 2>&1 || true
+        need_session=1
+    fi
+    if [ "$need_session" = 1 ]; then
+        printf 'anland-apps: starting the session (state was not usable)\n' >&2
+        systemctl --user restart anland-session >/dev/null 2>&1 || \
+            systemctl --user start anland-session >/dev/null 2>&1 || true
         i=0
-        while [ ! -r "$ENVF" ] && [ $i -lt 25 ]; do
+        while [ ! -r "$ENVF" ] && [ $i -lt 30 ]; do
             sleep 1
             i=$((i + 1))
         done
