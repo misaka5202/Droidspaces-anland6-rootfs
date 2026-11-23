@@ -44,6 +44,7 @@ jobs:
           set -euo pipefail
           mkdir -p tools/x86vk/.build
           cd tools/x86vk/.build
+          df -h . | tail -2
           curl -fsSL --retry 3 -o boot.tar.zst "$ARCH_BOOTSTRAP"
           echo "bootstrap: $(stat -c%s boot.tar.zst) bytes"
           # The bootstrap carries symlinks, setuid bits and xattrs, so it has to
@@ -61,6 +62,11 @@ jobs:
           # cannot. A bare chroot has neither, so bind the kernel filesystems in
           # and give mtab its usual target.
           sudo ln -sfn /proc/self/mounts "$R/etc/mtab"
+          # CheckSpace makes pacman statvfs the cache directory's mount point and
+          # refuse to commit when it cannot resolve one ("could not determine
+          # cachedir mount point"), which is exactly the chroot case even though
+          # the host filesystem has ample room.
+          sudo sed -i 's/^CheckSpace/#CheckSpace/' "$R/etc/pacman.conf"
           for d in proc sys dev dev/pts; do sudo mkdir -p "$R/$d"; done
           sudo mount -t proc proc "$R/proc"
           sudo mount --rbind /sys "$R/sys"
