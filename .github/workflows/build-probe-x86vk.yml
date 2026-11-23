@@ -115,7 +115,9 @@ jobs:
           # failure is cheap. pacman resolves them, this just proves it did.
           echo "-- dependency resolution for libvulkan_freedreno.so --"
           missing=0
-          for lib in $(python3 tools/x86vk/elf-needed.py "$R/usr/lib/libvulkan_freedreno.so"); do
+          # Absolute path: this step cds into tools/x86vk/.build, so a relative
+          # path would silently yield an empty loop and a false pass.
+          for lib in $(python3 "$GITHUB_WORKSPACE/tools/x86vk/elf-needed.py"                        "$R/usr/lib/libvulkan_freedreno.so"); do
             if find "$R/usr/lib" "$R/lib" -maxdepth 2 -name "$lib" 2>/dev/null | grep -q .; then
               echo "  ok    $lib"
             else
@@ -127,6 +129,11 @@ jobs:
             echo "::error::$missing libraries needed by libvulkan_freedreno.so are missing from the x86_64 tree"
             exit 1
           fi
+          # An empty DT_NEEDED list means the parser did not run, not that the
+          # driver has no dependencies; treat it as a failure.
+          checked=$(python3 "$GITHUB_WORKSPACE/tools/x86vk/elf-needed.py"                     "$R/usr/lib/libvulkan_freedreno.so" | wc -l)
+          echo "checked $checked dependencies"
+          [ "$checked" -gt 0 ] || { echo "::error::dependency check produced no output"; exit 1; }
 
           # Unmount before packing: an active bind mount would drag the runner's
           # /proc, /dev and /sys contents into the image.
