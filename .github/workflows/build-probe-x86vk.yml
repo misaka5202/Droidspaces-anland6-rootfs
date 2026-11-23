@@ -68,14 +68,17 @@ jobs:
           # the host filesystem has ample room.
           sudo sed -i 's/^CheckSpace/#CheckSpace/' "$R/etc/pacman.conf"
           for d in proc sys dev dev/pts; do sudo mkdir -p "$R/$d"; done
+          # Only /proc is mounted. pacman needs it to resolve /etc/mtab, and
+          # nothing here needs /sys. The few /dev nodes a package transaction
+          # touches are created directly: bind-mounting the runner's /dev brings
+          # along devpts, shm and mqueue, and those are the mounts that then
+          # refuse to go away before packing.
           sudo mount -t proc proc "$R/proc"
-          # --make-rslave is what makes an --rbind later unmountable: without it
-          # the bind inherits the host's shared propagation and umount refuses.
-          sudo mount --rbind /sys "$R/sys" && sudo mount --make-rslave "$R/sys"
-          sudo mount --rbind /dev "$R/dev" && sudo mount --make-rslave "$R/dev"
-          cleanup_mounts() {
-            for d in dev sys proc; do sudo umount -R "$R/$d" 2>/dev/null || true; done
-          }
+          for spec in "null 1 3" "zero 1 5" "full 1 7" "random 1 8" "urandom 1 9" "tty 5 0"; do
+            set -- $spec
+            sudo mknod -m 666 "$R/dev/$1" c "$2" "$3" 2>/dev/null || true
+          done
+          cleanup_mounts() { sudo umount -R "$R/proc" 2>/dev/null || true; }
           trap cleanup_mounts EXIT
 
           # Do not run reflector/keyring refresh loops here: the bootstrap
