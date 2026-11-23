@@ -138,16 +138,11 @@ if command -v systemctl >/dev/null 2>&1; then
         done
         need_session=0
     fi
-    # ...and its compositor connection must work, not just its process exist:
-    # after the daemon restarts the session keeps running against a dead socket
-    # and every client it starts is a zombie with no window. That cannot be
-    # repaired by starting the unit (it is already active), so log it instead of
-    # pretending to fix it.
-    wl_display=${WAYLAND_DISPLAY:-wayland-anland}
-    sock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$wl_display"
-    if [ -S "$sock" ] && ! ( exec 9<>"$sock" ) 2>/dev/null; then
-        printf 'anland-apps: display socket is not accepting connections\n' >&2
-    fi
+    # Liveness of the compositor connection is deliberately NOT probed here:
+    # `exec 9<>socket` is not a valid test for a unix socket in POSIX sh (the
+    # shell tries to open it read-write, which sockets reject), so it reports
+    # every healthy socket as dead. A client that cannot connect reports that
+    # itself, with a specific error, in the log this helper keeps.
     if [ "$need_session" = 1 ]; then
         # `start`, never `restart`: restarting stops the session first, and that
         # kills Xwayland under a client this helper is about to launch — the app
