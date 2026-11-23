@@ -56,6 +56,20 @@ jobs:
           printf 'Server = %s/$repo/os/$arch\n' "$ARCH_MIRROR" | sudo tee "$R/etc/pacman.d/mirrorlist" >/dev/null
           sudo cp /etc/resolv.conf "$R/etc/resolv.conf"
 
+          # pacman resolves /etc/mtab through /proc, and refuses to commit a
+          # transaction ("could not determine filesystem mount points") when it
+          # cannot. A bare chroot has neither, so bind the kernel filesystems in
+          # and give mtab its usual target.
+          sudo ln -sfn /proc/self/mounts "$R/etc/mtab"
+          for d in proc sys dev dev/pts; do sudo mkdir -p "$R/$d"; done
+          sudo mount -t proc proc "$R/proc"
+          sudo mount --rbind /sys "$R/sys"
+          sudo mount --rbind /dev "$R/dev"
+          cleanup_mounts() {
+            for d in dev sys proc; do sudo umount -R "$R/$d" 2>/dev/null || true; done
+          }
+          trap cleanup_mounts EXIT
+
           # Do not run reflector/keyring refresh loops here: the bootstrap
           # already carries a usable keyring and the sync below is enough.
           sudo chroot "$R" /bin/bash -euo pipefail -c '
@@ -74,6 +88,11 @@ jobs:
             test -e "$R/$f" || { echo "::error::$f missing after install"; exit 1; }
             echo "  ok  $f"
           done
+
+          # Unmount before packing: an active bind mount would drag the runner's
+          # /proc, /dev and /sys contents into the image.
+          cleanup_mounts
+          trap - EXIT
 
           sudo rm -rf "$R/var/cache/pacman/pkg" "$R/var/lib/pacman/sync" 2>/dev/null || true
           sudo tar --zstd -cf ../x86root.tar.zst root.x86_64
