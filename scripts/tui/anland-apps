@@ -142,11 +142,10 @@ UNIT="anland-app-$(printf '%s' "$id" | tr -c 'A-Za-z0-9-' '-')"
 APP_LOG="${XDG_RUNTIME_DIR:-/tmp}/anland-app.log"
 command -v systemd-run >/dev/null 2>&1 || die "systemd-run is missing; cannot launch"
 
-if systemctl --user is-active --quiet "$UNIT" 2>/dev/null; then
-    # already running: the application is up, nothing to do (a second instance
-    # of a single-instance desktop app would just ask the first one to open)
-    exit 0
-fi
+# Clear units left by earlier launches. This must not decide whether to start:
+# units use unique names now, so any match here is a leftover, and treating one
+# as "already running" skips the launch entirely (a tap that silently does
+# nothing). Process liveness is checked below instead.
 systemctl --user reset-failed "$UNIT" >/dev/null 2>&1 || true
 systemctl --user stop "$UNIT" >/dev/null 2>&1 || true
 
@@ -154,7 +153,7 @@ systemctl --user stop "$UNIT" >/dev/null 2>&1 || true
 LAUNCH_UNIT="$UNIT-$(date +%s)-$$"
 
 # shellcheck disable=SC2086  # exec_line is an argument list by design
-systemd-run --user --quiet --collect --unit "$LAUNCH_UNIT" \
+systemd-run --user --quiet --unit "$LAUNCH_UNIT" \
     --property=StandardOutput="append:$APP_LOG" \
     --property=StandardError="append:$APP_LOG" \
     --setenv="HOME=$(user_home)" \
@@ -163,6 +162,13 @@ systemd-run --user --quiet --collect --unit "$LAUNCH_UNIT" \
     --setenv="DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-}" \
     --setenv="PULSE_SERVER=${PULSE_SERVER:-}" \
     --setenv="PATH=${PATH:-/usr/local/bin:/usr/bin:/bin}" \
+    --setenv="QT_QPA_PLATFORM=wayland" \
+    --setenv="GDK_BACKEND=wayland" \
+    --setenv="SDL_VIDEODRIVER=wayland" \
+    --setenv="CLUTTER_BACKEND=wayland" \
+    --setenv="ECORE_EVAS_ENGINE=wayland_shm" \
+    --setenv="ELM_ENGINE=wayland_shm" \
+    --setenv="MOZ_ENABLE_WAYLAND=1" \
     /bin/sh -c "exec $exec_line" || die "could not start $id"
 
 # Report a unit that died at once (bad library, no display, crashed on startup)
