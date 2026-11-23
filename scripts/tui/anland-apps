@@ -101,25 +101,60 @@ if command -v systemctl >/dev/null 2>&1; then
     fi
 fi
 
+# systemctl --user resolves the user bus through XDG_RUNTIME_DIR, which a plain
+# `su -` login shell does not set. Without it every probe fails and the session
+# is "unusable" on every launch, restarting it each time and killing the client
+# that was just started (the app then dies with "The X11 connection broke").
+# Set it once, up front, for every check below.
+[ -n "${XDG_RUNTIME_DIR:-}" ] || XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_RUNTIME_DIR
+
+# The daemon runs with HOME=/ (it is an Android init-style service), and the
+# child inherits it. systemctl --user resolves the user manager partly through
+# HOME, so a wrong value makes every probe fail the same way. The real home comes
+# from the account database.
+case "${HOME:-}" in
+    "$(user_home)"|"") HOME="$(user_home)"; export HOME ;;
+esac
+
 # The session must actually be running: it owns Xwayland, the wayland link and
 # the environment. Probing the daemon's socket is not enough — that socket stays
 # alive on its own, so a dead session looks healthy and every launch then gets a
 # stale (or missing) DISPLAY and produces no window.
 need_session=0
 if command -v systemctl >/dev/null 2>&1; then
-    [ "$(systemctl --user is-active anland-session 2>/dev/null)" = "active" ] || need_session=1
+    sess_state=$(systemctl --user is-active anland-session 2>/dev/null)
+    case "$sess_state" in
+        active) ;;
+        # already coming up: restarting it here would kill the launch
+        activating|deactivating) need_session=2 ;;
+        *) need_session=1 ;;
+    esac
+    if [ "$need_session" = 2 ]; then
+        i=0
+        while [ "$(systemctl --user is-active anland-session 2>/dev/null)" != "active" ] && [ $i -lt 30 ]; do
+            sleep 1
+            i=$((i + 1))
+        done
+        need_session=0
+    fi
     # ...and its compositor connection must work, not just its process exist:
     # after the daemon restarts the session keeps running against a dead socket
-    # and every client it starts is a zombie with no window.
+    # and every client it starts is a zombie with no window. That cannot be
+    # repaired by starting the unit (it is already active), so log it instead of
+    # pretending to fix it.
     wl_display=${WAYLAND_DISPLAY:-wayland-anland}
     sock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$wl_display"
     if [ -S "$sock" ] && ! ( exec 9<>"$sock" ) 2>/dev/null; then
-        need_session=1
+        printf 'anland-apps: display socket is not accepting connections\n' >&2
     fi
     if [ "$need_session" = 1 ]; then
-        printf 'anland-apps: starting the session (state was not usable)\n' >&2
-        systemctl --user restart anland-session >/dev/null 2>&1 || \
-            systemctl --user start anland-session >/dev/null 2>&1 || true
+        # `start`, never `restart`: restarting stops the session first, and that
+        # kills Xwayland under a client this helper is about to launch — the app
+        # then dies with "The X11 connection broke". Starting an already-running
+        # unit is a no-op, so this is safe either way.
+        printf 'anland-apps: starting the session (it was not running)\n' >&2
+        systemctl --user start anland-session >/dev/null 2>&1 || true
         i=0
         while [ ! -r "$ENVF" ] && [ $i -lt 30 ]; do
             sleep 1
@@ -142,6 +177,17 @@ fi
 # X11 fallback: the session publishes the display number in ~/.anlandx, not in
 # the env file. Export it so toolkits that give up on wayland (Qt's plugin does
 # on this GPU path) can still reach Xwayland.
+# X11 display: the session publishes the authoritative value as a systemd user
+# environment variable, and only mirrors it into ~/.anlandx. The mirror goes
+# stale whenever an earlier session wrote it, and connecting to a dead Xwayland
+# fails with "The X11 connection broke". Prefer the user manager's value and use
+# the file only as a fallback.
+if [ -z "${DISPLAY:-}" ] && command -v systemctl >/dev/null 2>&1; then
+    mgr_display=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^DISPLAY=//p')
+    case "$mgr_display" in
+        :[0-9]*) DISPLAY="$mgr_display"; export DISPLAY ;;
+    esac
+fi
 if [ -z "${DISPLAY:-}" ] && [ -r "$XDISPLAY_FILE" ]; then
     xdisp=$(head -1 "$XDISPLAY_FILE" 2>/dev/null | tr -d '[:space:]')
     case "$xdisp" in
