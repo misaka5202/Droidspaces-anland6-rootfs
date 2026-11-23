@@ -62,37 +62,17 @@ jobs:
             https://gitlab.freedesktop.org/mesa/mesa.git mesa
           echo "checked out: $(git -C mesa rev-parse --short HEAD)"
 
-      # The exact option name is the one thing we could not confirm offline, so
-      # ask meson what it accepts instead of guessing: if the option is absent the
-      # configure below fails loudly and prints the candidates.
-      - name: Discover the kgsl option
-        id: opt
-        run: |
-          set -uo pipefail
-          cd mesa
-          opts=$(meson setup /tmp/probe-build -Dvulkan-drivers=freedreno \
-                   -Dgallium-drivers= -Dglx=disabled -Degl=disabled 2>&1 || true)
-          echo "$opts" | tail -20
-          echo "--- meson options mentioning kgsl ---"
-          meson configure /tmp/probe-build 2>/dev/null | grep -i kgsl | tee /tmp/kgsl.txt || true
-          if [ -s /tmp/kgsl.txt ]; then
-            name=$(awk 'NR==1{print $1}' /tmp/kgsl.txt)
-            echo "name=$name" >> "$GITHUB_OUTPUT"
-            echo "found option: $name"
-          else
-            echo "name=" >> "$GITHUB_OUTPUT"
-            echo "::warning::no meson option mentioning kgsl was found"
-          fi
-
+      # src/freedreno/vulkan/meson.build gates the backend on
+      #   if freedreno_kmds.contains('kgsl')
+      #     tu_flags += '-DTU_HAS_KGSL'
+      #     libtu_files += files('tu_knl_kgsl.cc')
+      # so the switch is the freedreno-kmds array, not a boolean. Arch's desktop
+      # package leaves it at the msm default, which is why its .so has no kgsl
+      # strings at all.
       - name: Configure
         run: |
           set -euo pipefail
           cd mesa
-          KGSLARG=""
-          if [ -n "${{ steps.opt.outputs.name }}" ]; then
-            KGSLARG="-D${{ steps.opt.outputs.name }}=true"
-          fi
-          echo "kgsl arg: ${KGSLARG:-<none>}"
           meson setup build \
             --buildtype=release \
             -Dvulkan-drivers=freedreno \
@@ -103,7 +83,7 @@ jobs:
             -Dplatforms= \
             -Dllvm=disabled \
             -Dvideo-codecs= \
-            $KGSLARG
+            -Dfreedreno-kmds=kgsl
 
       - name: Build libvulkan_freedreno.so
         run: |
