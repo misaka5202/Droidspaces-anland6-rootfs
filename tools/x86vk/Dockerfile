@@ -21,7 +21,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         box64 \
         ca-certificates \
+        mesa-vulkan-drivers \
         systemd-sysv \
+        tar \
+        vulkan-tools \
+        zstd \
     && rm -rf /var/lib/apt/lists/*
 
 # Built by the workflow: Arch bootstrap + vulkan-freedreno (x86_64 Turnip)
