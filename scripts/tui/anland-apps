@@ -40,7 +40,15 @@ ENVF="$(user_home)/.anlandx-env"
 # need DISPLAY, and without it they abort with "could not connect to display".
 XDISPLAY_FILE="$(user_home)/.anlandx"
 
-die() { printf '%s\n' "$*" >&2; exit 1; }
+# Diagnostics go to a file as well as stderr: the daemon runs this helper with
+# its stderr discarded, so a failure there is otherwise invisible on the device
+# (a tap that does nothing, with no trace anywhere).
+SELF_LOG="${ANLAND_APPS_SELF_LOG:-/run/anland/anland-apps.log}"
+say() {
+    printf 'anland-apps: %s\n' "$*" >&2
+    printf '%s %s\n' "$(date +%H:%M:%S)" "$*" >>"$SELF_LOG" 2>/dev/null || true
+}
+die() { say "$*"; exit 1; }
 
 # One key from a .desktop file, first occurrence, [Desktop Entry] group only.
 desktop_get() {
@@ -148,7 +156,7 @@ if command -v systemctl >/dev/null 2>&1; then
         # kills Xwayland under a client this helper is about to launch — the app
         # then dies with "The X11 connection broke". Starting an already-running
         # unit is a no-op, so this is safe either way.
-        printf 'anland-apps: starting the session (it was not running)\n' >&2
+        say 'starting the session (it was not running)'
         systemctl --user start anland-session >/dev/null 2>&1 || true
         i=0
         while [ ! -r "$ENVF" ] && [ $i -lt 30 ]; do
@@ -182,6 +190,19 @@ if [ -z "${DISPLAY:-}" ] && command -v systemctl >/dev/null 2>&1; then
     case "$mgr_display" in
         :[0-9]*) DISPLAY="$mgr_display"; export DISPLAY ;;
     esac
+fi
+# The systemd user environment can be empty (a restarted session republishes
+# it, and until it does every consumer sees nothing), so fall back to the
+# sockets Xwayland actually left behind: the highest numbered one is the live
+# display.
+if [ -z "${DISPLAY:-}" ]; then
+    for x in /tmp/.X11-unix/X*; do
+        [ -S "$x" ] || continue
+        n="${x##*/X}"
+        case "$n" in ''|*[!0-9]*) continue ;; esac
+        DISPLAY=":$n"
+    done
+    [ -n "${DISPLAY:-}" ] && export DISPLAY
 fi
 if [ -z "${DISPLAY:-}" ] && [ -r "$XDISPLAY_FILE" ]; then
     xdisp=$(head -1 "$XDISPLAY_FILE" 2>/dev/null | tr -d '[:space:]')
@@ -242,8 +263,9 @@ systemd-run --user --quiet --unit "$LAUNCH_UNIT" \
 # instead of leaving 'the icon did nothing' as the only symptom.
 sleep 2
 if ! systemctl --user is-active --quiet "$LAUNCH_UNIT" 2>/dev/null; then
-    printf 'anland-apps: %s exited immediately; last output:\n' "$exec_line" >&2
+    say "$exec_line exited immediately; see $APP_LOG"
     systemctl --user status "$LAUNCH_UNIT" --no-pager -n 15 2>&1 >&2 || true
     exit 1
 fi
+say "launched $exec_line (unit $LAUNCH_UNIT)"
 exit 0
