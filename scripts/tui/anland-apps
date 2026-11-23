@@ -74,6 +74,28 @@ exec_line=$(printf '%s' "$exec_line" | sed 's/%[fFuUdDnNickvm]//g')
 
 # The session publishes its environment here; without XDG_RUNTIME_DIR and
 # WAYLAND_DISPLAY the client cannot reach the daemon and nothing appears.
+#
+# A shortcut is also the first thing run after a cold container start, when no
+# session exists yet, so bring it up here: this runs as the desktop user inside
+# the container, which is exactly the context systemd --user needs.
+# Ask systemd rather than trusting the env file: the session removes it on a
+# clean exit but not when it is killed, and a stale file would make a dead
+# session look alive — the client then fails to connect and the tap does
+# nothing. `systemctl --user` needs XDG_RUNTIME_DIR, which a plain `su -` login
+# shell does not set (the call then fails before logging anything).
+if command -v systemctl >/dev/null 2>&1; then
+    [ -n "${XDG_RUNTIME_DIR:-}" ] || XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    export XDG_RUNTIME_DIR
+    if [ "$(systemctl --user is-active anland-session 2>/dev/null)" != "active" ]; then
+        systemctl --user start anland-session >/dev/null 2>&1 || true
+        i=0
+        while [ ! -r "$ENVF" ] && [ $i -lt 25 ]; do
+            sleep 1
+            i=$((i + 1))
+        done
+    fi
+fi
+
 if [ -r "$ENVF" ]; then
     while IFS= read -r line; do
         case "$line" in
@@ -86,4 +108,20 @@ elif [ -z "${WAYLAND_DISPLAY:-}" ]; then
 fi
 
 # setsid: leave the container's process group so the app outlives this call.
-exec setsid sh -c "$exec_line"
+# Detach fully: setsid gives the application its own session, and closing all
+# three standard descriptors lets the caller's `droidspaces run` return at once.
+# Without this the container runtime waits on the application (it inherits the
+# pipe), so the shortcut looks like it does nothing while the app is already up.
+#
+# stderr still goes to a log: a client that dies during startup (no display, bad
+# library, crashed) leaves nothing else behind, and "the icon did nothing" is
+# otherwise undiagnosable from the device.
+APPDIR_LOG="${XDG_RUNTIME_DIR:-/tmp}/anland-app.log"
+setsid sh -c "$exec_line" </dev/null >"$APPDIR_LOG" 2>&1 &
+sleep 1
+if ! pgrep -f "$(printf '%s' "$exec_line" | awk '{print $1}')" >/dev/null 2>&1; then
+    printf 'anland-apps: %s exited immediately; log follows\n' "$exec_line" >&2
+    tail -20 "$APPDIR_LOG" >&2 2>/dev/null
+    exit 1
+fi
+exit 0
