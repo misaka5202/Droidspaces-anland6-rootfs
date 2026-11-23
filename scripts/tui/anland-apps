@@ -1,0 +1,89 @@
+#!/bin/sh
+# anland-apps — launch one application inside the container by .desktop id.
+#
+#   anland-apps run <id>
+#
+# The daemon calls this to start container software on behalf of a pinned
+# home-screen shortcut. It exists as a separate step because the daemon must
+# never accept an executable path from the caller: the host activity that
+# forwards a shortcut intent is exported, so anything it accepts is reachable
+# by every app on the device. Here the only input is an id matching
+# [a-z0-9-], and the argv comes from the container's own .desktop file — an
+# arbitrary-command channel would require writing a .desktop inside the
+# container first, which already means root inside it.
+#
+# Listing is deliberately not implemented: anland-shell parses the .desktop
+# dump itself (with localisation and precedence) and owns the catalogue UI.
+
+set -u
+
+APPDIR="${ANLAND_APPS_DIR:-/usr/share/applications}"
+LOCALDIR="${ANLAND_APPS_LOCAL_DIR:-/usr/local/share/applications}"
+
+# Resolve the session env file from the account database, never from $HOME:
+# droidspaces injects the HOST environment into container processes, so $HOME
+# can arrive as an Android/Windows path that does not exist in here.
+user_home() {
+    home=""
+    if command -v getent >/dev/null 2>&1; then
+        home=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f6)
+    fi
+    if [ -z "$home" ]; then
+        home=$(awk -F: -v u="$(id -un)" '$1 == u { print $6; exit }' /etc/passwd 2>/dev/null)
+    fi
+    printf '%s' "${home:-/root}"
+}
+ENVF="$(user_home)/.anlandx-env"
+
+die() { printf '%s\n' "$*" >&2; exit 1; }
+
+# One key from a .desktop file, first occurrence, [Desktop Entry] group only.
+desktop_get() {
+    awk -v key="$2" '
+        /^\[/ { ingroup = ($0 == "[Desktop Entry]"); next }
+        ingroup && index($0, key "=") == 1 { sub("^" key "=", ""); print; exit }
+    ' "$1" 2>/dev/null
+}
+
+[ "${1:-}" = "run" ] || die "usage: anland-apps run <id>"
+[ $# -ge 2 ] || die "usage: anland-apps run <id>"
+
+id=$2
+# Real .desktop basenames look like org.gnome.clocks / com.github.johnfactotum.
+# Foliate: letters, digits, dots, dash and underscore. '.' is allowed because
+# ids use it as a namespace separator, so reject traversal explicitly — no
+# slash can appear at all, and a leading dot would name a hidden/relative path.
+case "$id" in
+    *[!A-Za-z0-9._-]*|'') die "invalid app id: $id" ;;
+    .*|*..*)              die "invalid app id: $id" ;;
+esac
+
+# Later directories win, matching the .desktop spec (user/local over system).
+desktop=""
+for d in "$APPDIR" "$LOCALDIR"; do
+    [ -f "$d/$id.desktop" ] && desktop="$d/$id.desktop"
+done
+[ -n "$desktop" ] || die "unknown app id: $id"
+[ "$(desktop_get "$desktop" Type)" = "Application" ] || die "not an application: $id"
+
+exec_line=$(desktop_get "$desktop" Exec)
+[ -n "$exec_line" ] || die "no Exec line: $id"
+# Field codes (%f %u %F %U ...) are never substituted: a launcher tab has no
+# file to hand over, and leaving them in would pass the literal token.
+exec_line=$(printf '%s' "$exec_line" | sed 's/%[fFuUdDnNickvm]//g')
+
+# The session publishes its environment here; without XDG_RUNTIME_DIR and
+# WAYLAND_DISPLAY the client cannot reach the daemon and nothing appears.
+if [ -r "$ENVF" ]; then
+    while IFS= read -r line; do
+        case "$line" in
+            ''|'#'*) ;;
+            *=*) export "$line" ;;
+        esac
+    done < "$ENVF"
+elif [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    die "no session environment (is the anland session running?)"
+fi
+
+# setsid: leave the container's process group so the app outlives this call.
+exec setsid sh -c "$exec_line"
