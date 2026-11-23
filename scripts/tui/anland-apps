@@ -107,21 +107,51 @@ elif [ -z "${WAYLAND_DISPLAY:-}" ]; then
     die "no session environment (is the anland session running?)"
 fi
 
-# setsid: leave the container's process group so the app outlives this call.
-# Detach fully: setsid gives the application its own session, and closing all
-# three standard descriptors lets the caller's `droidspaces run` return at once.
-# Without this the container runtime waits on the application (it inherits the
-# pipe), so the shortcut looks like it does nothing while the app is already up.
-#
-# stderr still goes to a log: a client that dies during startup (no display, bad
-# library, crashed) leaves nothing else behind, and "the icon did nothing" is
-# otherwise undiagnosable from the device.
-APPDIR_LOG="${XDG_RUNTIME_DIR:-/tmp}/anland-app.log"
-setsid sh -c "$exec_line" </dev/null >"$APPDIR_LOG" 2>&1 &
-sleep 1
-if ! pgrep -f "$(printf '%s' "$exec_line" | awk '{print $1}')" >/dev/null 2>&1; then
-    printf 'anland-apps: %s exited immediately; log follows\n' "$exec_line" >&2
-    tail -20 "$APPDIR_LOG" >&2 2>/dev/null
+# Hand the process to the systemd user manager rather than detaching it with
+# setsid: `droidspaces run` tears down the process tree it created, so a
+# backgrounded client is killed the moment this helper returns — the shortcut
+# then looks like it did nothing while the app had already been started.
+# A transient --user unit belongs to the user manager instead, and inherits the
+# session environment through --setenv below (systemd-run does not forward the
+# caller's environment). `--collect` keeps a failed unit's status readable.
+# Unit names must be unique per launch. A transient unit stays registered after
+# its process exits (and after a crash), so reusing the id as the unit name
+# makes every second launch fail with "Unit ... was already loaded", which looks
+# exactly like a dead shortcut. Clear a stale unit of the same name first, then
+# give this launch its own name so a still-running instance is not disturbed.
+UNIT="anland-app-$(printf '%s' "$id" | tr -c 'A-Za-z0-9-' '-')"
+APP_LOG="${XDG_RUNTIME_DIR:-/tmp}/anland-app.log"
+command -v systemd-run >/dev/null 2>&1 || die "systemd-run is missing; cannot launch"
+
+if systemctl --user is-active --quiet "$UNIT" 2>/dev/null; then
+    # already running: the application is up, nothing to do (a second instance
+    # of a single-instance desktop app would just ask the first one to open)
+    exit 0
+fi
+systemctl --user reset-failed "$UNIT" >/dev/null 2>&1 || true
+systemctl --user stop "$UNIT" >/dev/null 2>&1 || true
+
+# Unique per launch so a lingering unit cannot block the next tap.
+LAUNCH_UNIT="$UNIT-$(date +%s)-$$"
+
+# shellcheck disable=SC2086  # exec_line is an argument list by design
+systemd-run --user --quiet --collect --unit "$LAUNCH_UNIT" \
+    --property=StandardOutput="append:$APP_LOG" \
+    --property=StandardError="append:$APP_LOG" \
+    --setenv="HOME=$(user_home)" \
+    --setenv="XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-}" \
+    --setenv="WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}" \
+    --setenv="DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-}" \
+    --setenv="PULSE_SERVER=${PULSE_SERVER:-}" \
+    --setenv="PATH=${PATH:-/usr/local/bin:/usr/bin:/bin}" \
+    /bin/sh -c "exec $exec_line" || die "could not start $id"
+
+# Report a unit that died at once (bad library, no display, crashed on startup)
+# instead of leaving 'the icon did nothing' as the only symptom.
+sleep 2
+if ! systemctl --user is-active --quiet "$LAUNCH_UNIT" 2>/dev/null; then
+    printf 'anland-apps: %s exited immediately; last output:\n' "$exec_line" >&2
+    systemctl --user status "$LAUNCH_UNIT" --no-pager -n 15 2>&1 >&2 || true
     exit 1
 fi
 exit 0
