@@ -1294,6 +1294,16 @@ install_arch_packages() {
 
 refresh_user_service() {
     command -v systemctl >/dev/null 2>&1 || return 0
+    # Linger keeps the per-user systemd manager alive. Without it the manager is
+    # torn down and restarted, and every transient unit under it dies with it —
+    # launched applications vanish a few seconds after their window appears, and
+    # an enabled session unit is not restarted either. Written directly because
+    # loginctl refuses to act on a user it does not manage inside a container.
+    if [ -d /var/lib/systemd/linger ] || [ -w /var/lib ] 2>/dev/null; then
+        mkdir -p /var/lib/systemd/linger 2>/dev/null || true
+        : > "/var/lib/systemd/linger/${USER:-$(id -un)}" 2>/dev/null || true
+        chmod 644 "/var/lib/systemd/linger/${USER:-$(id -un)}" 2>/dev/null || true
+    fi
     if systemctl --user daemon-reload >/dev/null 2>&1; then
         if systemctl --user enable --now anland-session.service >/dev/null 2>&1; then
             log "已刷新、启用并启动 anland-session 用户服务。" \
