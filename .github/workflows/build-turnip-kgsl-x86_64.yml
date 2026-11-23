@@ -1,0 +1,136 @@
+# Build an x86_64 Turnip that can actually reach an Android GPU.
+#
+# The probe established exactly where the wall is, and it is not box64:
+#   * box64 forwards open() and DRM ioctls correctly on this device
+#     (/dev/kgsl-3d0 and /dev/dri/renderD128 both open, DRM_IOCTL_VERSION returns
+#     a real version number under emulation)
+#   * the x86_64 Turnip from Arch loads, resolves every symbol, and runs to
+#     completion once call_once is shimmed and the emulated graphics stack is used
+#   * but it reports no physical device, because Arch's desktop build carries no
+#     kgsl backend at all: its .so contains zero occurrences of "kgsl-3d0" and one
+#     of "kgsl", against 1 and 13 respectively in the aarch64 Android build that
+#     works on this device
+#
+# Android exposes the GPU through kgsl, not through desktop DRM, so a Turnip
+# built for a desktop distro cannot see it. This job builds one with
+# freedreno-kgsl enabled and proves the string is present before uploading.
+name: Build x86_64 Turnip with kgsl
+
+on:
+  workflow_dispatch:
+    inputs:
+      mesa_ref:
+        description: Mesa tag or branch to build
+        required: false
+        default: mesa-26.3.1
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Turnip x86_64 + kgsl
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential meson ninja-build pkg-config python3-pip \
+            bison flex libdrm-dev libexpat1-dev libzstd-dev zlib1g-dev \
+            libx11-dev libx11-xcb-dev libxcb1-dev libxcb-dri3-dev \
+            libxcb-present-dev libxcb-shm-dev libxcb-randr0-dev \
+            libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev \
+            libwayland-dev libelf-dev glslang-tools python3-mako
+          pip3 install --break-system-packages mako pyyaml
+
+      - name: Clone Mesa
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "${{ inputs.mesa_ref }}" \
+            https://gitlab.freedesktop.org/mesa/mesa.git mesa
+          echo "checked out: $(git -C mesa rev-parse --short HEAD)"
+
+      # The exact option name is the one thing we could not confirm offline, so
+      # ask meson what it accepts instead of guessing: if the option is absent the
+      # configure below fails loudly and prints the candidates.
+      - name: Discover the kgsl option
+        id: opt
+        run: |
+          set -uo pipefail
+          cd mesa
+          opts=$(meson setup /tmp/probe-build -Dvulkan-drivers=freedreno \
+                   -Dgallium-drivers= -Dglx=disabled -Degl=disabled 2>&1 || true)
+          echo "$opts" | tail -20
+          echo "--- meson options mentioning kgsl ---"
+          meson configure /tmp/probe-build 2>/dev/null | grep -i kgsl | tee /tmp/kgsl.txt || true
+          if [ -s /tmp/kgsl.txt ]; then
+            name=$(awk 'NR==1{print $1}' /tmp/kgsl.txt)
+            echo "name=$name" >> "$GITHUB_OUTPUT"
+            echo "found option: $name"
+          else
+            echo "name=" >> "$GITHUB_OUTPUT"
+            echo "::warning::no meson option mentioning kgsl was found"
+          fi
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          cd mesa
+          KGSLARG=""
+          if [ -n "${{ steps.opt.outputs.name }}" ]; then
+            KGSLARG="-D${{ steps.opt.outputs.name }}=true"
+          fi
+          echo "kgsl arg: ${KGSLARG:-<none>}"
+          meson setup build \
+            --buildtype=release \
+            -Dvulkan-drivers=freedreno \
+            -Dgallium-drivers= \
+            -Dglx=disabled \
+            -Degl=disabled \
+            -Dgbm=disabled \
+            -Dplatforms= \
+            -Dllvm=disabled \
+            -Dvideo-codecs= \
+            $KGSLARG
+
+      - name: Build libvulkan_freedreno.so
+        run: |
+          set -euo pipefail
+          cd mesa
+          ninja -C build src/freedreno/vulkan/libvulkan_freedreno.so
+          SO=$(find build -name 'libvulkan_freedreno.so*' -type f | head -1)
+          echo "built: $SO"
+          ls -l "$SO"
+          cp "$SO" "$GITHUB_WORKSPACE/libvulkan_freedreno.x86_64.so"
+
+      # The whole point of this build: the kgsl backend must be compiled in.
+      # Arch's desktop .so has zero occurrences of "kgsl-3d0"; ours must not.
+      - name: Verify the kgsl backend is present
+        run: |
+          set -euo pipefail
+          SO=libvulkan_freedreno.x86_64.so
+          echo "file: $(file -b "$SO")"
+          n_dev=$(grep -ac 'kgsl-3d0' "$SO" || true)
+          n_kgsl=$(grep -ac 'kgsl' "$SO" || true)
+          echo "kgsl-3d0 occurrences: $n_dev"
+          echo "kgsl occurrences    : $n_kgsl"
+          echo "(reference: Arch desktop build = 0 and 1; aarch64 Android build = 1 and 13)"
+          if [ "$n_dev" -eq 0 ] && [ "$n_kgsl" -le 1 ]; then
+            echo "::error::the kgsl backend was not compiled in — this .so cannot see an Android GPU"
+            exit 1
+          fi
+          echo "kgsl backend present"
+          sha256sum "$SO" | tee SHA256SUMS
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: turnip-x86_64-kgsl
+          path: |
+            libvulkan_freedreno.x86_64.so
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
