@@ -94,7 +94,7 @@ jobs:
 
   build-zh-qualcomm:
     name: Build zh / Qualcomm Adreno
-    if: ${{ inputs.sync_cnb_only != true && (inputs.language == 'zh' || inputs.language == 'both') && (inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'qualcomm') }}
+    if: ${{ inputs.sync_cnb_only != true && (inputs.language == '' || inputs.language == 'zh' || inputs.language == 'both') && (inputs.gpu_vendor == '' || inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'qualcomm') }}
     needs: prepare
     uses: ./.github/workflows/build-rootfs-core.yml
     with:
@@ -124,7 +124,7 @@ jobs:
 
   build-zh-mediatek:
     name: Build zh / MediaTek Mali
-    if: ${{ inputs.sync_cnb_only != true && (inputs.language == 'zh' || inputs.language == 'both') && (inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'mediatek') }}
+    if: ${{ inputs.sync_cnb_only != true && (inputs.language == '' || inputs.language == 'zh' || inputs.language == 'both') && (inputs.gpu_vendor == '' || inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'mediatek') }}
     needs: prepare
     uses: ./.github/workflows/build-rootfs-core.yml
     with:
@@ -154,7 +154,7 @@ jobs:
 
   build-en-qualcomm:
     name: Build en / Qualcomm Adreno
-    if: ${{ inputs.sync_cnb_only != true && (inputs.language == 'en' || inputs.language == 'both') && (inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'qualcomm') }}
+    if: ${{ inputs.sync_cnb_only != true && (inputs.language == '' || inputs.language == 'en' || inputs.language == 'both') && (inputs.gpu_vendor == '' || inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'qualcomm') }}
     needs: prepare
     uses: ./.github/workflows/build-rootfs-core.yml
     with:
@@ -184,7 +184,7 @@ jobs:
 
   build-en-mediatek:
     name: Build en / MediaTek Mali
-    if: ${{ inputs.sync_cnb_only != true && (inputs.language == 'en' || inputs.language == 'both') && (inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'mediatek') }}
+    if: ${{ inputs.sync_cnb_only != true && (inputs.language == '' || inputs.language == 'en' || inputs.language == 'both') && (inputs.gpu_vendor == '' || inputs.gpu_vendor == 'both' || inputs.gpu_vendor == 'mediatek') }}
     needs: prepare
     uses: ./.github/workflows/build-rootfs-core.yml
     with:
@@ -215,7 +215,10 @@ jobs:
   release:
     name: Update the GitHub rolling Release
     needs: [prepare, build-zh-qualcomm, build-zh-mediatek, build-en-qualcomm, build-en-mediatek]
-    if: ${{ !cancelled() && inputs.sync_cnb_only != true && inputs.publish_release != true }}
+    # Require at least one build to have succeeded: with every matrix leg failing
+    # or skipped there is nothing to publish, and the "no artifacts" error below
+    # would blame this job for a build failure.
+    if: ${{ !cancelled() && inputs.sync_cnb_only != true && inputs.publish_release != true && (needs.build-zh-qualcomm.result == 'success' || needs.build-zh-mediatek.result == 'success' || needs.build-en-qualcomm.result == 'success' || needs.build-en-mediatek.result == 'success') }}
     runs-on: ubuntu-latest
     env:
       # Single-desktop tests use a dedicated tag to avoid polluting the rolling Release
