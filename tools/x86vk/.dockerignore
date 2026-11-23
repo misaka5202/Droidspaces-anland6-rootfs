@@ -1,0 +1,3 @@
+# The unpacked Arch bootstrap lives here during the build; only the repacked
+# tarball is meant to enter the image context.
+.build/

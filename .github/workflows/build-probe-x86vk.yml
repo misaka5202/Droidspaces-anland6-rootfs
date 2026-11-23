@@ -1,0 +1,130 @@
+# Probe build — NOT part of the RootFS matrix and NOT a release source.
+#
+# Produces one small bootable image that answers a single question on real
+# Adreno hardware: can an x86_64 Vulkan client drive kgsl under an x86-on-ARM
+# translator? Proton is x86_64, so the ICD it loads must be x86_64 too, while
+# the GPU is reached through aarch64 kernel interfaces. If this works, the
+# DXVK/VKD3D path on Qualcomm is viable and the current
+# PROTON_USE_WINED3D=1 workaround in install-steam.sh can be revisited.
+#
+# Why the x86_64 tree is built here rather than on the device: the runner is
+# x86_64, so `chroot` + `pacman` installs Arch's vulkan-freedreno natively.
+# Debian/Ubuntu's own amd64 mesa-vulkan-drivers does NOT ship freedreno (its
+# amd64 ICDs are intel/radeon/nouveau/lvp/asahi/virtio/gfxstream only), so Arch
+# is the only distro that hands us an x86_64 Turnip as a ready package.
+name: Build x86 Vulkan probe rootfs
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Upload the image to this Release tag (empty = artifact only)
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  ARCH_BOOTSTRAP: https://geo.mirror.pkgbuild.com/iso/latest/archlinux-bootstrap-x86_64.tar.zst
+  ARCH_MIRROR: https://geo.mirror.pkgbuild.com
+
+jobs:
+  build:
+    name: Probe image (box64 + x86_64 Turnip)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Native x86_64: no emulation, so a full pacman transaction is quick and
+      # the resulting tree is exactly what Arch ships.
+      - name: Build x86_64 Arch userspace with Turnip
+        run: |
+          set -euo pipefail
+          mkdir -p tools/x86vk/.build
+          cd tools/x86vk/.build
+          curl -fsSL --retry 3 -o boot.tar.zst "$ARCH_BOOTSTRAP"
+          echo "bootstrap: $(stat -c%s boot.tar.zst) bytes"
+          tar --zstd -xf boot.tar.zst
+          R=root.x86_64
+          test -x "$R/usr/bin/pacman" || { echo "::error::bootstrap layout unexpected"; exit 1; }
+
+          printf 'Server = %s/$repo/os/$arch\n' "$ARCH_MIRROR" > "$R/etc/pacman.d/mirrorlist"
+          cp /etc/resolv.conf "$R/etc/resolv.conf"
+
+          # Do not run reflector/keyring refresh loops here: the bootstrap
+          # already carries a usable keyring and the sync below is enough.
+          chroot "$R" /bin/bash -euo pipefail -c '
+            pacman-key --init >/dev/null 2>&1 || true
+            pacman-key --populate archlinux >/dev/null 2>&1 || true
+            pacman -Syu --noconfirm --needed
+            pacman -S --noconfirm --needed \
+              vulkan-freedreno vulkan-tools mesa libdrm
+            pacman -Scc --noconfirm
+          '
+
+          # Prove the pieces exist before shipping a 200 MB tarball.
+          for f in usr/lib/libvulkan_freedreno.so \
+                   usr/share/vulkan/icd.d/freedreno_icd.json \
+                   usr/bin/vulkaninfo usr/lib/libvulkan.so.1 usr/bin/true; do
+            test -e "$R/$f" || { echo "::error::$f missing after install"; exit 1; }
+            echo "  ok  $f"
+          done
+
+          rm -rf "$R/var/cache/pacman/pkg" "$R/var/lib/pacman/sync" "$R/var/log"/* 2>/dev/null || true
+          tar --zstd -cf ../x86root.tar.zst root.x86_64
+          ls -lh ../x86root.tar.zst
+
+      - name: Register arm64 binfmt
+        run: docker run --privileged --rm tonistiigi/binfmt --install arm64
+
+      - name: Build arm64 probe image
+        run: |
+          set -euo pipefail
+          docker buildx create --use --name xvk >/dev/null 2>&1 || docker buildx use xvk
+          docker buildx build \
+            --platform linux/arm64 \
+            --output type=docker \
+            -t xvk-probe:latest \
+            tools/x86vk
+
+      - name: Export rootfs
+        run: |
+          set -euo pipefail
+          out="Ubuntu-26-xvk-probe-zh-qualcomm-rootfs.tar.xz"
+          cid=$(docker create --platform linux/arm64 xvk-probe:latest)
+          docker export "$cid" | xz -T0 -6 > "$out"
+          docker rm "$cid" >/dev/null
+          xz -t "$out" || { echo "::error::xz integrity check failed"; exit 1; }
+          echo "size: $(stat -c%s "$out") bytes"
+          sha256sum "$out" | tee SHA256SUMS
+          echo "OUT=$out" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: xvk-probe-rootfs
+          path: |
+            Ubuntu-26-xvk-probe-zh-qualcomm-rootfs.tar.xz
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+      # Artifact-only by default. A tag has to be passed in explicitly, so this
+      # workflow can never publish anything on its own.
+      - name: Upload to a Release
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.release_tag }}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$OUT" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "$OUT" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$tag" \
+              --notes "x86 Vulkan probe image (box64 + x86_64 Turnip on kgsl). Not a desktop image."
+          fi
