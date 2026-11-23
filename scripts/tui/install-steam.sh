@@ -446,22 +446,36 @@ if [ -z "${STEAM_GL_MODE:-}" ]; then
     unset _gpu _d
 fi
 
-# Proton/Vulkan environment for game launches.  Validated on Adreno + Mali:
+# Proton/Vulkan environment for game launches.
 #
-#   * DXVK cannot create a Vulkan instance in this container.  The only ICDs the
-#     x86-64 Proton binaries can load live in the FEX rootfs and Unity titles
-#     crash inside winevulkan, so route D3D through wined3d/OpenGL instead.
+#   * D3D defaults to wined3d/OpenGL.  STEAM_DXVK=1 opts into the Vulkan path
+#     instead, which needs an x86-64 Turnip with the kgsl backend and libstdc++
+#     linked statically; see tools/x86vk/ for the verified recipe and
+#     .github/workflows/build-turnip-kgsl-x86_64.yml for how that driver is
+#     built.  The distro Turnip cannot do it: Arch's .so carries no kgsl backend
+#     at all (zero occurrences of "kgsl-3d0"), and Android reaches the GPU
+#     through kgsl rather than desktop DRM, so it reports no physical device.
 #   * steam-launch-wrapper injects VK_INSTANCE_LAYERS with two Valve layers that
 #     no image ships; the loader then fails every instance creation.
 #   * lsteamclient asserts (steamclient_main.c:573) because no 64-bit
 #     steamclient.so exists, so disable the native Steam bridge.
-export PROTON_USE_WINED3D=1
+if [[ "${STEAM_DXVK:-0}" == "1" ]]; then
+    # Explicit override required: the DXVK path depends on a purpose-built
+    # driver, and silently choosing it on an image that lacks one turns every
+    # title into a black screen.
+    unset PROTON_USE_WINED3D
+else
+    export PROTON_USE_WINED3D=1
+fi
 export VK_LOADER_LAYERS_DISABLE="~all~"
 export WINEDLLOVERRIDES="lsteamclient=d;steamclient64=d;steamclient=d"
-if [ -z "${VK_ICD_FILENAMES:-}" ]; then
-    for _icd in /usr/share/guestos/fex-mesa/usr/share/vulkan/icd.d/freedreno_icd.x86_64.json \
+if [[ -z "${VK_ICD_FILENAMES:-}" ]]; then
+    # Arch names the ICD freedreno_icd.json while Debian-style multiarch trees
+    # use freedreno_icd.x86_64.json; try both, keep Turnip ahead of lavapipe.
+    for _icd in /usr/share/guestos/fex-mesa/usr/share/vulkan/icd.d/freedreno_icd.json \
+                /usr/share/guestos/fex-mesa/usr/share/vulkan/icd.d/freedreno_icd.x86_64.json \
                 /usr/share/guestos/fex-mesa/usr/share/vulkan/icd.d/lvp_icd.x86_64.json; do
-        if [ -f "$_icd" ]; then VK_ICD_FILENAMES="$_icd"; export VK_ICD_FILENAMES; break; fi
+        if [[ -f "$_icd" ]]; then VK_ICD_FILENAMES="$_icd"; export VK_ICD_FILENAMES; break; fi
     done
     unset _icd
 fi

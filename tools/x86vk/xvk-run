@@ -1,0 +1,106 @@
+#!/bin/sh
+# xvk-run — reproduce the verified x86_64 Turnip-on-kgsl environment.
+#
+# This is the recipe that was proven working on an Adreno 735 (SM7675) device:
+#
+#   GPU0: deviceName = Turnip Adreno (TM) 735
+#         driverID   = DRIVER_ID_MESA_TURNIP
+#         driverInfo = Mesa 26.3.1
+#
+# Three things have to be true at once, and each one was found by a separate
+# failure. Keep them together or the driver silently reports no GPU:
+#
+#   1. Turnip must be built with the kgsl backend. Desktop distro builds gate it
+#      out — Arch's package has zero occurrences of "kgsl-3d0" — and Android
+#      exposes the GPU through kgsl rather than desktop DRM, so such a build can
+#      never enumerate it. Built by .github/workflows/build-turnip-kgsl-x86_64.yml
+#      with -Dfreedreno-kmds=kgsl.
+#
+#   2. libstdc++ must be linked into that driver statically. box64 answers
+#      R_X86_64_TLSDESC with "not supported for now"; libstdc++'s std::call_once
+#      keeps __once_callable/__once_call in TLS reached that way, so a dynamic
+#      libstdc++ leaves a null trampoline that the driver jumps into right after
+#      it discovers /dev/kgsl-3d0. Preloading a shim cannot fix this because the
+#      relocation happens at load time, which is why the build passes
+#      -static-libstdc++; the resulting object has no libstdc++ in NEEDED.
+#
+#   3. Every emulated library must win over the host's copy. box64 prefers to
+#      wrap a native library, and the host's aarch64 libwayland/libxcb are older
+#      than what Turnip 26.x links against (wl_display_create_queue_with_name,
+#      xcb_dri3_free_syncobj, ...). With no native graphics libraries present
+#      box64 falls back to the x86_64 tree, where those symbols exist.
+#
+# call_once itself (the C symbol, GLOBAL/UND/FUNC in Turnip's dynsym) is still
+# missing from box64's wrapped libc table, so callonce_shim.c supplies it.
+#
+# Usage: xvk-run [vulkaninfo-args...]
+# Requires: /opt/x86root with the x86_64 tree, x86_64-linux-gnu-gcc for the shim.
+set -u
+
+ROOT=${X86ROOT:-/opt/x86root}
+NAT=${NATIVE_LIBDIR:-/usr/lib/aarch64-linux-gnu}
+WORK=${XVK_WORK:-/tmp/xvk}
+SHIM="$WORK/libcallonce.so"
+ICD="$WORK/freedreno_icd.json"
+L="$ROOT/usr/lib:$ROOT/usr/lib/x86_64-linux-gnu:/usr/x86_64-linux-gnu/lib:$WORK"
+
+mkdir -p "$WORK"
+
+# Native graphics libraries that box64 must not wrap. Missing entries are fine.
+HIDE_LIST="libvulkan.so.1 libwayland-client.so.0 libwayland-server.so.0 \
+libxcb.so.1 libxcb-dri3.so.0 libxcb-present.so.0 libxcb-xfixes.so.0 \
+libxcb-randr.so.0 libxcb-sync.so.1 libxcb-shm.so.0 libxcb-keysyms.so.1 \
+libX11.so.6 libX11-xcb.so.1 libxshmfence.so.1 libxau.so.6 libXdmcp.so.6 libffi.so.8"
+
+restore_native() {
+    for f in "$NAT"/*.hidden; do
+        [ -e "$f" ] && mv "$f" "${f%.hidden}" 2>/dev/null
+    done
+}
+
+hide_native() {
+    for base in $HIDE_LIST; do
+        for f in "$NAT/$base" "$NAT/$base".*; do
+            [ -e "$f" ] || continue
+            case "$f" in *.hidden) continue ;; esac
+            mv "$f" "$f.hidden" 2>/dev/null
+        done
+    done
+}
+
+die() { echo "xvk-run: $*" >&2; exit 1; }
+
+[ -x "$ROOT/usr/bin/vulkaninfo" ] || die "$ROOT/usr/bin/vulkaninfo missing"
+[ -f "$ROOT/usr/lib/libvulkan_freedreno.so" ] || die "$ROOT/usr/lib/libvulkan_freedreno.so missing"
+
+# The kgsl backend must be compiled in, otherwise the run is pointless.
+if [ "$(grep -ac 'kgsl-3d0' "$ROOT/usr/lib/libvulkan_freedreno.so" 2>/dev/null || echo 0)" -eq 0 ]; then
+    die "this Turnip has no kgsl backend (grep kgsl-3d0 = 0); rebuild it with -Dfreedreno-kmds=kgsl"
+fi
+
+if [ ! -f "$SHIM" ]; then
+    command -v x86_64-linux-gnu-gcc >/dev/null 2>&1 \
+        || die "x86_64-linux-gnu-gcc is needed once to build the call_once shim"
+    x86_64-linux-gnu-gcc -shared -fPIC -nostdlib -O2 \
+        -o "$SHIM" "$(dirname "$0")/callonce_shim.c" \
+        || die "shim build failed"
+fi
+
+sed "s|\"library_path\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"library_path\": \"$ROOT/usr/lib/libvulkan_freedreno.so\"|" \
+    "$ROOT/usr/share/vulkan/icd.d/freedreno_icd.json" > "$ICD" 2>/dev/null \
+    || die "cannot read freedreno_icd.json from the x86_64 tree"
+
+trap restore_native EXIT INT TERM
+hide_native
+
+BOX64_LOG=${BOX64_LOG:-0} \
+BOX64_LD_LIBRARY_PATH="$L" \
+BOX64_LD_PRELOAD="$SHIM" \
+VK_ICD_FILENAMES="$ICD" \
+VK_DRIVER_FILES="$ICD" \
+    box64 "$ROOT/usr/bin/vulkaninfo" "$@"
+rc=$?
+
+restore_native
+trap - EXIT INT TERM
+exit $rc
