@@ -96,6 +96,25 @@ if command -v systemctl >/dev/null 2>&1; then
     fi
 fi
 
+# The session being 'active' does not mean its compositor connection is alive:
+# after the daemon restarts, the session keeps running against a dead socket and
+# every client it launches is a zombie with no window. Probe the socket by
+# opening it — with nobody listening the connect fails immediately — and restart
+# the session when it does.
+if command -v systemctl >/dev/null 2>&1; then
+    wl_display=${WAYLAND_DISPLAY:-wayland-anland}
+    sock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$wl_display"
+    if [ -S "$sock" ] && ! ( exec 9<>"$sock" ) 2>/dev/null; then
+        printf 'anland-apps: display socket dead, restarting the session\n' >&2
+        systemctl --user restart anland-session >/dev/null 2>&1 || true
+        i=0
+        while [ ! -r "$ENVF" ] && [ $i -lt 25 ]; do
+            sleep 1
+            i=$((i + 1))
+        done
+    fi
+fi
+
 if [ -r "$ENVF" ]; then
     while IFS= read -r line; do
         case "$line" in
