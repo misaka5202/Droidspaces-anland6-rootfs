@@ -73,6 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           cd mesa
+          LDFLAGS="-static-libstdc++ -static-libgcc" \
           meson setup build \
             --buildtype=release \
             -Dvulkan-drivers=freedreno \
@@ -83,6 +84,8 @@ jobs:
             -Dplatforms= \
             -Dllvm=disabled \
             -Dvideo-codecs= \
+            -Dcpp_link_args="-static-libstdc++ -static-libgcc" \
+            -Dc_link_args="-static-libgcc" \
             -Dfreedreno-kmds=kgsl
 
       - name: Build libvulkan_freedreno.so
@@ -112,6 +115,16 @@ jobs:
             exit 1
           fi
           echo "kgsl backend present"
+          # With libstdc++ linked statically the once-call state becomes
+          # library-local, so the driver should carry no dynamic dependency on
+          # libstdc++ and no TLSDESC relocation for __once_call — the exact
+          # relocation box64 refuses.
+          echo "--- dynamic libstdc++ dependency ---"
+          if readelf -d "$SO" 2>/dev/null | grep -q 'libstdc++'; then
+            echo "::warning::still linking libstdc++ dynamically; TLSDESC will likely return"
+          else
+            echo "static: no dynamic libstdc++ dependency"
+          fi
           sha256sum "$SO" | tee SHA256SUMS
 
       - uses: actions/upload-artifact@v6
