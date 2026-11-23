@@ -46,16 +46,19 @@ jobs:
           cd tools/x86vk/.build
           curl -fsSL --retry 3 -o boot.tar.zst "$ARCH_BOOTSTRAP"
           echo "bootstrap: $(stat -c%s boot.tar.zst) bytes"
-          tar --zstd -xf boot.tar.zst
+          # The bootstrap carries symlinks, setuid bits and xattrs, so it has to
+          # be unpacked as root — the runner user cannot create those entries.
+          sudo tar --zstd -xf boot.tar.zst
+          sudo chown -R "$(id -u):$(id -g)" root.x86_64
           R=root.x86_64
           test -x "$R/usr/bin/pacman" || { echo "::error::bootstrap layout unexpected"; exit 1; }
 
-          printf 'Server = %s/$repo/os/$arch\n' "$ARCH_MIRROR" > "$R/etc/pacman.d/mirrorlist"
-          cp /etc/resolv.conf "$R/etc/resolv.conf"
+          printf 'Server = %s/$repo/os/$arch\n' "$ARCH_MIRROR" | sudo tee "$R/etc/pacman.d/mirrorlist" >/dev/null
+          sudo cp /etc/resolv.conf "$R/etc/resolv.conf"
 
           # Do not run reflector/keyring refresh loops here: the bootstrap
           # already carries a usable keyring and the sync below is enough.
-          chroot "$R" /bin/bash -euo pipefail -c '
+          sudo chroot "$R" /bin/bash -euo pipefail -c '
             pacman-key --init >/dev/null 2>&1 || true
             pacman-key --populate archlinux >/dev/null 2>&1 || true
             pacman -Syu --noconfirm --needed
@@ -72,8 +75,9 @@ jobs:
             echo "  ok  $f"
           done
 
-          rm -rf "$R/var/cache/pacman/pkg" "$R/var/lib/pacman/sync" "$R/var/log"/* 2>/dev/null || true
-          tar --zstd -cf ../x86root.tar.zst root.x86_64
+          sudo rm -rf "$R/var/cache/pacman/pkg" "$R/var/lib/pacman/sync" 2>/dev/null || true
+          sudo tar --zstd -cf ../x86root.tar.zst root.x86_64
+          sudo chown "$(id -u):$(id -g)" ../x86root.tar.zst
           ls -lh ../x86root.tar.zst
 
       - name: Register arm64 binfmt
