@@ -69,8 +69,10 @@ jobs:
           sudo sed -i 's/^CheckSpace/#CheckSpace/' "$R/etc/pacman.conf"
           for d in proc sys dev dev/pts; do sudo mkdir -p "$R/$d"; done
           sudo mount -t proc proc "$R/proc"
-          sudo mount --rbind /sys "$R/sys"
-          sudo mount --rbind /dev "$R/dev"
+          # --make-rslave is what makes an --rbind later unmountable: without it
+          # the bind inherits the host's shared propagation and umount refuses.
+          sudo mount --rbind /sys "$R/sys" && sudo mount --make-rslave "$R/sys"
+          sudo mount --rbind /dev "$R/dev" && sudo mount --make-rslave "$R/dev"
           cleanup_mounts() {
             for d in dev sys proc; do sudo umount -R "$R/$d" 2>/dev/null || true; done
           }
@@ -99,6 +101,13 @@ jobs:
           # /proc, /dev and /sys contents into the image.
           cleanup_mounts
           trap - EXIT
+          # Fail loudly rather than ship a multi-GB image full of /sys: tar would
+          # happily archive a still-mounted tree.
+          if mount | grep -q " $PWD/root.x86_64/"; then
+            echo "::error::bind mounts still active under $PWD/root.x86_64 — refusing to pack"
+            mount | grep " $PWD/root.x86_64/"
+            exit 1
+          fi
 
           sudo rm -rf "$R/var/cache/pacman/pkg" "$R/var/lib/pacman/sync" 2>/dev/null || true
           sudo tar --zstd -cf ../x86root.tar.zst root.x86_64
