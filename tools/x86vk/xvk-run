@@ -1,110 +1,58 @@
 #!/bin/sh
-# xvk-run — reproduce the verified x86_64 Turnip-on-kgsl environment.
+# xvk-run — run an x86_64 Vulkan client against this device's GPU.
 #
-# This is the recipe that was proven working on an Adreno 735 (SM7675) device:
+# Verified on Adreno 735 (SM7675) inside a droidspaces container:
 #
-#   GPU0: deviceName = Turnip Adreno (TM) 735
-#         driverID   = DRIVER_ID_MESA_TURNIP
-#         driverInfo = Mesa 26.3.1
+#   $ xvk-run --summary                 # vulkaninfo, enumerates the GPU
+#   $ vkcube --wsi wayland --c 120 ...  # renders; ~83 fps at 640x360
 #
-# Three things have to be true at once, and each one was found by a separate
-# failure. Keep them together or the driver silently reports no GPU:
+# The whole trick is to let box64 wrap the host's own libvulkan instead of
+# emulating an x86_64 one:
 #
-#   1. Turnip must be built with the kgsl backend. Desktop distro builds gate it
-#      out — Arch's package has zero occurrences of "kgsl-3d0" — and Android
-#      exposes the GPU through kgsl rather than desktop DRM, so such a build can
-#      never enumerate it. Built by .github/workflows/build-turnip-kgsl-x86_64.yml
-#      with -Dfreedreno-kmds=kgsl.
+#   [BOX64] Using native(wrapped) libvulkan.so.1
 #
-#   2. libstdc++ must be linked into that driver statically. box64 answers
-#      R_X86_64_TLSDESC with "not supported for now"; libstdc++'s std::call_once
-#      keeps __once_callable/__once_call in TLS reached that way, so a dynamic
-#      libstdc++ leaves a null trampoline that the driver jumps into right after
-#      it discovers /dev/kgsl-3d0. Preloading a shim cannot fix this because the
-#      relocation happens at load time, which is why the build passes
-#      -static-libstdc++; the resulting object has no libstdc++ in NEEDED.
+# The aarch64 Turnip that ships in the image is already kgsl-capable, so no
+# x86_64 driver is needed at all. Cross-building one is a dead end; see
+# NOTES.md in this directory for why (GBM needs the full GL state tracker, which
+# a Vulkan-only build cannot have).
 #
-#   3. Every emulated library must win over the host's copy. box64 prefers to
-#      wrap a native library, and the host's aarch64 libwayland/libxcb are older
-#      than what Turnip 26.x links against (wl_display_create_queue_with_name,
-#      xcb_dri3_free_syncobj, ...). With no native graphics libraries present
-#      box64 falls back to the x86_64 tree, where those symbols exist.
+# Two prerequisites that are easy to miss and produce confusing symptoms:
 #
-# call_once itself (the C symbol, GLOBAL/UND/FUNC in Turnip's dynsym) is still
-# missing from box64's wrapped libc table, so callonce_shim.c supplies it.
+#   * Run as the user that owns the display sockets. anland starts Xwayland and
+#     the Wayland socket as the session user (uid 1000), so a root-owned process
+#     gets 'Authorization required' from X or an unusable Wayland connection.
+#   * The screen must be awake. With the device asleep no window is composited,
+#     so no wl_surface.frame callback ever arrives and every client blocks in
+#     poll until it times out — which looks exactly like a driver hang.
 #
 # Usage: xvk-run [vulkaninfo-args...]
-# Requires: /opt/x86root with the x86_64 tree, x86_64-linux-gnu-gcc for the shim.
 set -u
 
 ROOT=${X86ROOT:-/opt/x86root}
-NAT=${NATIVE_LIBDIR:-/usr/lib/aarch64-linux-gnu}
+SESSION_USER=${XVK_USER:-Gold}
 WORK=${XVK_WORK:-/tmp/xvk}
-SHIM="$WORK/libcallonce.so"
-ICD="$WORK/freedreno_icd.json"
-L="$ROOT/usr/lib:$ROOT/usr/lib/x86_64-linux-gnu:/usr/x86_64-linux-gnu/lib:$WORK"
+LOG="$WORK/vulkaninfo.log"
 
 mkdir -p "$WORK"
-
-# Native graphics libraries that box64 must not wrap. Missing entries are fine.
-HIDE_LIST="libvulkan.so.1 libwayland-client.so.0 libwayland-server.so.0 \
-libxcb.so.1 libxcb-dri3.so.0 libxcb-present.so.0 libxcb-xfixes.so.0 \
-libxcb-randr.so.0 libxcb-sync.so.1 libxcb-shm.so.0 libxcb-keysyms.so.1 \
-libX11.so.6 libX11-xcb.so.1 libxshmfence.so.1 libxau.so.6 libXdmcp.so.6 libffi.so.8"
-
-restore_native() {
-    for f in "$NAT"/*.hidden; do
-        [ -e "$f" ] && mv "$f" "${f%.hidden}" 2>/dev/null
-    done
-}
-
-hide_native() {
-    for base in $HIDE_LIST; do
-        for f in "$NAT/$base" "$NAT/$base".*; do
-            [ -e "$f" ] || continue
-            case "$f" in *.hidden) continue ;; esac
-            mv "$f" "$f.hidden" 2>/dev/null
-        done
-    done
-}
 
 die() { echo "xvk-run: $*" >&2; exit 1; }
 
 [ -x "$ROOT/usr/bin/vulkaninfo" ] || die "$ROOT/usr/bin/vulkaninfo missing"
-[ -f "$ROOT/usr/lib/libvulkan_freedreno.so" ] || die "$ROOT/usr/lib/libvulkan_freedreno.so missing"
 
-# The kgsl backend must be compiled in, otherwise the run is pointless.
-if [ "$(grep -ac 'kgsl-3d0' "$ROOT/usr/lib/libvulkan_freedreno.so" 2>/dev/null || echo 0)" -eq 0 ]; then
-    die "this Turnip has no kgsl backend (grep kgsl-3d0 = 0); rebuild it with -Dfreedreno-kmds=kgsl"
-fi
+# The host loader and Turnip must be present: they are what actually runs.
+[ -e /usr/lib/aarch64-linux-gnu/libvulkan.so.1 ] \
+    || die "host libvulkan missing; this path wraps the host loader"
 
-# A headless-only driver enumerates the GPU but cannot present, which looks like
-# success right up until a game tries to draw. Catch it here.
-if [ "$(grep -ac 'VK_KHR_wayland_surface' "$ROOT/usr/lib/libvulkan_freedreno.so" 2>/dev/null || echo 0)" -eq 0 ]; then
-    die "this Turnip has no window-system integration; rebuild with -Dplatforms=x11,wayland"
-fi
+# A stale .hidden library from an older approach would silently change which
+# driver loads. Put them back rather than debug a phantom.
+for f in /usr/lib/aarch64-linux-gnu/*.hidden; do
+    [ -e "$f" ] && mv "$f" "${f%.hidden}" 2>/dev/null
+done
 
-if [ ! -f "$SHIM" ]; then
-    command -v x86_64-linux-gnu-gcc >/dev/null 2>&1 \
-        || die "x86_64-linux-gnu-gcc is needed once to build the call_once shim"
-    x86_64-linux-gnu-gcc -shared -fPIC -nostdlib -O2 \
-        -o "$SHIM" "$(dirname "$0")/callonce_shim.c" \
-        || die "shim build failed"
-fi
+# Deliberately unset: pinning this at an x86_64 ICD is what made box64 emulate a
+# driver instead of wrapping the host one, and that path cannot present.
+unset VK_ICD_FILENAMES VK_DRIVER_FILES 2>/dev/null || true
 
-sed "s|\"library_path\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"library_path\": \"$ROOT/usr/lib/libvulkan_freedreno.so\"|" \
-    "$ROOT/usr/share/vulkan/icd.d/freedreno_icd.json" > "$ICD" 2>/dev/null \
-    || die "cannot read freedreno_icd.json from the x86_64 tree"
-
-trap restore_native EXIT INT TERM
-hide_native
-
-# Presentation needs the anland Wayland socket. X11 also works but asserts an
-# xauth cookie this container has no business holding, whereas the compositor's
-# own socket needs none. Verified on Adreno 735:
-#   Surface type  = VK_KHR_wayland_surface
-#   Present Modes = MAILBOX_KHR, FIFO_KHR
-# so a game can put pixels on screen, not merely submit compute.
 if [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d /run/user/1000 ]; then
     XDG_RUNTIME_DIR=/run/user/1000
     export XDG_RUNTIME_DIR
@@ -114,14 +62,31 @@ if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -S /run/anland/wayland-0 ]; then
     export WAYLAND_DISPLAY
 fi
 
-BOX64_LOG=${BOX64_LOG:-0} \
-BOX64_LD_LIBRARY_PATH="$L" \
-BOX64_LD_PRELOAD="$SHIM" \
-VK_ICD_FILENAMES="$ICD" \
-VK_DRIVER_FILES="$ICD" \
-    box64 "$ROOT/usr/bin/vulkaninfo" "$@"
+# Wake the panel: a sleeping device composites nothing, and the client then waits
+# forever for frame callbacks.
+if command -v dumpsys >/dev/null 2>&1; then
+    if dumpsys power 2>/dev/null | grep -q 'mWakefulness=Asleep'; then
+        echo "xvk-run: screen asleep — waking it (otherwise nothing is composited)" >&2
+        input keyevent KEYCODE_WAKEUP >/dev/null 2>&1
+        sleep 1
+        wm dismiss-keyguard >/dev/null 2>&1
+        sleep 1
+    fi
+fi
+
+ENVV="XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR WAYLAND_DISPLAY=$WAYLAND_DISPLAY \
+BOX64_LOG=${BOX64_LOG:-0} BOX64_LD_LIBRARY_PATH=$ROOT/usr/lib:$ROOT/usr/lib/x86_64-linux-gnu"
+
+# Drop privileges when asked to, so the process owns the display sockets.
+if [ "$(id -u)" = "0" ] && [ -n "$SESSION_USER" ]; then
+    runuser -u "$SESSION_USER" -- env $ENVV box64 "$ROOT/usr/bin/vulkaninfo" "$@" \
+        > "$LOG" 2>&1
+else
+    env $ENVV box64 "$ROOT/usr/bin/vulkaninfo" "$@" > "$LOG" 2>&1
+fi
 rc=$?
 
-restore_native
-trap - EXIT INT TERM
+# box64 is chatty about the native libraries it declines to wrap; that noise is
+# expected here, not a failure.
+grep -vE '^\[.?.?.?BOX64' "$LOG" | grep -vE '^[[:space:]]*$'
 exit $rc

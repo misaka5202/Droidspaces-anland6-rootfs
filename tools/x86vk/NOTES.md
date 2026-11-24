@@ -49,7 +49,37 @@ the above reconstruction is needed. The whole x86_64 driver subtask collapses:
 This is also what GameNative/Winlator do in effect: translate the application and
 the Windows layer, not the graphics driver.
 
-## Current blocker: presentation needs a mapped window
+## Presentation works — but only awake, and only as the session user
+
+Two non-obvious prerequisites cost a lot of time. Both look like driver failures
+and are neither:
+
+1. **The screen must be awake.** With `mWakefulness=Asleep` the device composites
+   nothing, so no `wl_surface.frame` callback is ever delivered and the client
+   blocks in `poll` until it times out. box64, FEX and the aarch64 native binary
+   all behaved identically, which is the clue that the driver is not involved.
+   Once awake, all of them complete their frame loop.
+
+2. **It must run as the session user (uid 1000).** anland starts Xwayland and the
+   Wayland socket as that user, so a root-owned process gets `Authorization
+   required` from X. Switching to the session user fixed the X path immediately
+   (`Surface types: count = 2`).
+
+Verified once those are met:
+
+```
+10 帧 320x240  rc=0
+60 帧 480x320  rc=0
+120 帧 640x360 rc=0    -> 1431 ms, ~83 fps
+```
+
+Note the X11 path is not usable for GPU presentation regardless: the rootless
+Xwayland in this session has no DRI3 (`No DRI3 support detected - required for
+presentation`), so a client falls back to llvmpipe and then dies on
+`Illegal instruction` under emulation. Wayland is the only path that reaches the
+GPU, because its dmabuf path can hand kgsl buffers straight through.
+
+## Historical note: the xdg-shell stall
 
 Even with the driver side solved, vkcube selects the GPU and then stalls in
 `do_sys_poll` waiting for `wl_surface.frame` callbacks. Six runs, with and without
