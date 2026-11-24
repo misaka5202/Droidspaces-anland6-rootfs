@@ -153,17 +153,25 @@ jobs:
           STAGE=/tmp/stage
           MINI=/tmp/mini
           rm -rf "$MINI"; mkdir -p "$MINI"
-          W="$STAGE/usr/lib/x86_64-linux-gnu"
-          mkdir -p "$MINI/usr/bin" "$MINI$W/wine" "$MINI/opt/dxvk"
-          for f in "$STAGE/usr/bin/wine64" "$STAGE/usr/bin/wine"; do
+          # Relative, so the overlay lands at usr/... rather than nested under the
+          # staging path.
+          W=usr/lib/x86_64-linux-gnu
+          mkdir -p "$MINI/usr/bin" "$MINI/$W/wine"
+          for f in "$STAGE"/usr/bin/wine64 "$STAGE"/usr/bin/wine; do
             [ -e "$f" ] && cp -a "$f" "$MINI/usr/bin/"
           done
           # libwine plus the wineserver/unix halves, no PE tree.
-          cp -a "$W"/libwine.so* "$MINI$W/" 2>/dev/null || true
+          cp -a "$STAGE/$W"/libwine.so* "$MINI/$W/" 2>/dev/null || true
           for d in x86_64-unix wineserver wine; do
-            [ -e "$W/wine/$d" ] && cp -a "$W/wine/$d" "$MINI$W/wine/"
+            [ -e "$STAGE/$W/wine/$d" ] && cp -a "$STAGE/$W/wine/$d" "$MINI/$W/wine/"
           done
           du -sh "$MINI"
+          # The overlay must carry absolute rootfs paths, not the staging prefix.
+          if [ ! -d "$MINI/usr/lib" ]; then
+            echo "::error::minimal payload is not rooted correctly"
+            find "$MINI" -maxdepth 3 -type d | head
+            exit 1
+          fi
           cd "$MINI"
           tar --zstd -cf "$GITHUB_WORKSPACE/wine-mini.tar.zst" .
           cd "$GITHUB_WORKSPACE"
