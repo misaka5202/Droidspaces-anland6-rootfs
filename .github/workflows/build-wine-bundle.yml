@@ -68,19 +68,29 @@ jobs:
           # A per-file bash loop over the wine packages takes tens of thousands of
           # process spawns and stalls the job; hand the filtered list to tar so it
           # happens in one pass.
-          { dpkg -L wine64; dpkg -L libwine; dpkg -L wine; dpkg -L wine-common; } 2>/dev/null             | sort -u             | grep -vE '^(/usr/share/(doc|man|lintian|locale)/|\.\.?$)'             | grep -vE '\.(a|la)$'             | grep -vE '/wine/(i386|i386-windows|i386-unix)'             | grep -v '^/usr/lib/wine/i386'             | while IFS= read -r f; do [ -e "$f" ] && echo "$f"; done > /tmp/filelist.txt
+          { dpkg -L wine64; dpkg -L libwine; dpkg -L wine; dpkg -L wine-common; } 2>/dev/null > /tmp/allpaths.txt
+          grep -vE '^(/usr/share/(doc|man|lintian|locale)/|\.\.?$)' /tmp/allpaths.txt > /tmp/f1.txt
+          grep -vE '\.(a|la)$' /tmp/f1.txt > /tmp/f2.txt
+          grep -vE '/wine/(i386|i386-windows|i386-unix)' /tmp/f2.txt > /tmp/f3.txt
+          grep -v '^/usr/lib/wine/i386' /tmp/f3.txt | sort -u > /tmp/filelist.raw
+          while IFS= read -r f; do [ -e "$f" ] && echo "$f"; done < /tmp/filelist.raw > /tmp/filelist.txt
 
           echo "files to stage: $(wc -l < /tmp/filelist.txt)"
           tar -cf - --no-recursion -T /tmp/filelist.txt 2>/dev/null | tar -xf - -C "$STAGE"
-          echo "--- staged size ---"
+          echo "--- staged size by subtree ---"
           du -sh "$STAGE"
+          for d in usr/bin usr/lib usr/share opt; do
+            [ -e "$STAGE/$d" ] && du -sh "$STAGE/$d" 2>/dev/null
+          done
+          echo "--- wine dll dirs ---"
+          du -sh "$STAGE"/usr/lib/x86_64-linux-gnu/wine/* 2>/dev/null | sort -hr | head -6
 
           # Anything wine's own binaries need that is not in a base image is listed
           # rather than bundled: box64 wraps host libraries, so an x86_64 copy is
-          # usually the wrong answer. Revisit this list if the device reports a
-          # missing soname.
+          # usually the wrong answer. Never let this abort the build - ldd exits
+          # non-zero on unresolved symbols and pipefail would take the step down.
           echo "--- libraries wine64 links against ---"
-          ldd "$(command -v wine64)" 2>/dev/null | awk '{print $1}' | sort -u | head -30
+          ldd "$(command -v wine64)" 2>/dev/null | awk '{print $1}' | sort -u | head -30 || true
 
       - name: Fetch DXVK
         env:
