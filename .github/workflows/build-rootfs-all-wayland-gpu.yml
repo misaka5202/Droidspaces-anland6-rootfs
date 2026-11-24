@@ -218,7 +218,14 @@ jobs:
     # Require at least one build to have succeeded: with every matrix leg failing
     # or skipped there is nothing to publish, and the "no artifacts" error below
     # would blame this job for a build failure.
-    if: ${{ !cancelled() && inputs.sync_cnb_only != true && inputs.publish_release != true && (needs.build-zh-qualcomm.result == 'success' || needs.build-zh-mediatek.result == 'success' || needs.build-en-qualcomm.result == 'success' || needs.build-en-mediatek.result == 'success') }}
+    #
+    # publish_release is tested with `== true`, not `!= true`. The input defaults to
+    # true and its description says to set it false for artifact-only runs, so the
+    # inverted test skipped this job on every default invocation: builds went green,
+    # artifacts were produced, and then expired after retention-days with no Release
+    # ever created to hold them. Keeping the old form here would mean the archives
+    # stay reachable only for the retention window.
+    if: ${{ !cancelled() && inputs.sync_cnb_only != true && inputs.publish_release == true && (needs.build-zh-qualcomm.result == 'success' || needs.build-zh-mediatek.result == 'success' || needs.build-en-qualcomm.result == 'success' || needs.build-en-mediatek.result == 'success') }}
     runs-on: ubuntu-latest
     env:
       # Single-desktop tests use a dedicated tag to avoid polluting the rolling Release

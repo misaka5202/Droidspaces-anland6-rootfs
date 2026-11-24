@@ -123,7 +123,10 @@ jobs:
   release:
     name: Update the GitHub Release
     needs: [prepare, build-zh-qualcomm, build-zh-mediatek]
-    if: ${{ !cancelled() && inputs.publish_release != true }}
+    # publish_release defaults to true and means "publish"; the inverted test here
+    # skipped this job on every default run, so artifacts expired without a Release
+    # to hold them. Same fix as the all-wayland-gpu workflow.
+    if: ${{ !cancelled() && inputs.publish_release == true }}
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ inputs.custom_release_tag || 'droidspaces-rootfs-steam' }}
