@@ -81,7 +81,7 @@ jobs:
             -Dglx=disabled \
             -Degl=disabled \
             -Dgbm=enabled \
-            -Dplatforms=x11,wayland \
+            -Dplatforms=x11,wayland,drm \
             -Dllvm=disabled \
             -Dvideo-codecs= \
             -Dcpp_link_args="-static-libstdc++ -static-libgcc" \
@@ -136,6 +136,10 @@ jobs:
           fi
           echo "WSI present"
 
+          # Mesa refuses -Dgbm=enabled unless a DRM/KMS platform is present
+          # ('GBM only supports DRM/KMS platforms'), which is why platforms
+          # includes drm above even though the driver is Vulkan-only.
+          #
           # Mesa's Wayland WSI allocates swapchain images through GBM. With
           # -Dgbm=disabled the surface can be created and its capabilities
           # queried — which is all vulkaninfo does, so earlier checks passed —
