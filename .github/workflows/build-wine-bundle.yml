@@ -156,7 +156,9 @@ jobs:
             src=$(find /usr/lib/x86_64-linux-gnu -maxdepth 1 -name "$lib" 2>/dev/null | head -1)
             if [ -n "$src" ]; then
               mkdir -p "$STAGE/usr/lib/x86_64-linux-gnu"
-              cp -a "$src" "$STAGE/usr/lib/x86_64-linux-gnu/" 2>/dev/null || true
+              # -L: these sonames are symlinks to versioned files, and copying the
+              # link alone leaves a dangling entry that tar then drops.
+              cp -L "$src" "$STAGE/usr/lib/x86_64-linux-gnu/" 2>/dev/null || true
               echo "  bundled $lib"
             fi
           done < /tmp/needed.txt
@@ -244,7 +246,7 @@ jobs:
             case "$(basename "$so")" in
               libavcodec*|libavformat*|libavutil*|libgst*|libgphoto2*|libglib*|libgobject*) continue ;;
             esac
-            cp -a "$so" "$MINI/$W/" 2>/dev/null || true
+            cp -L "$so" "$MINI/$W/" 2>/dev/null || true
           done
           [ -d "$STAGE/usr/share/wine" ] && mkdir -p "$MINI/usr/share" && \
             cp -a "$STAGE/usr/share/wine" "$MINI/usr/share/" || true
