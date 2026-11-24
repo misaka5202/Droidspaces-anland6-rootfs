@@ -236,6 +236,16 @@ jobs:
             [ -e "$STAGE/$W/wine/$d" ] && cp -a "$STAGE/$W/wine/$d" "$MINI/$W/wine/"
           done
           cp -a "$STAGE/$W"/libwine.so* "$MINI/$W/" 2>/dev/null || true
+          # The non-base libraries collected above, minus the multimedia stack that
+          # only matters for audio/video playback. libunwind is mandatory: ntdll.so
+          # will not dlopen without it.
+          for so in "$STAGE/$W"/*.so*; do
+            [ -e "$so" ] || continue
+            case "$(basename "$so")" in
+              libavcodec*|libavformat*|libavutil*|libgst*|libgphoto2*|libglib*|libgobject*) continue ;;
+            esac
+            cp -a "$so" "$MINI/$W/" 2>/dev/null || true
+          done
           [ -d "$STAGE/usr/share/wine" ] && mkdir -p "$MINI/usr/share" && \
             cp -a "$STAGE/usr/share/wine" "$MINI/usr/share/" || true
           du -sh "$MINI"
