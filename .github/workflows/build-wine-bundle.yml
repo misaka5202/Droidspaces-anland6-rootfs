@@ -120,8 +120,29 @@ jobs:
           # rather than bundled: box64 wraps host libraries, so an x86_64 copy is
           # usually the wrong answer. Never let this abort the build - ldd exits
           # non-zero on unresolved symbols and pipefail would take the step down.
-          echo "--- libraries wine64 links against ---"
-          ldd "$(command -v wine64)" 2>/dev/null | awk '{print $1}' | sort -u | head -30 || true
+          # Resolve every DT_NEEDED of the unix-side wine modules: a single missing
+          # soname stops wine dead at dlopen, and finding them one per CI run is
+          # far too slow. Anything unresolved that is not a glibc base library gets
+          # reported here.
+          echo "--- unresolved dependencies of the wine unix modules ---"
+          : > /tmp/needed.txt
+          for so in "$STAGE"/usr/lib/x86_64-linux-gnu/wine/x86_64-unix/*.so; do
+            [ -e "$so" ] || continue
+            readelf -d "$so" 2>/dev/null | awk '/NEEDED/{gsub(/[\[\]]/,"",$5); print $5}'
+          done | sort -u > /tmp/needed.txt
+          echo "  distinct sonames: $(wc -l < /tmp/needed.txt)"
+          missing=0
+          while IFS= read -r lib; do
+            [ -n "$lib" ] || continue
+            case "$lib" in
+              libc.so.6|libm.so.6|libpthread.so.0|libdl.so.2|librt.so.1|libresolv.so.2|libutil.so.1|ld-linux-x86-64.so.2) continue ;;
+            esac
+            if ! find "$STAGE" /usr/lib/x86_64-linux-gnu -name "$lib" 2>/dev/null | head -1 | grep -q .; then
+              echo "  MISSING $lib"
+              missing=$((missing + 1))
+            fi
+          done < /tmp/needed.txt
+          echo "  unresolved: $missing"
 
       - name: Fetch DXVK
         env:
