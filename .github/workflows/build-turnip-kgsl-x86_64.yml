@@ -77,7 +77,7 @@ jobs:
           meson setup build \
             --buildtype=release \
             -Dvulkan-drivers=freedreno \
-            -Dgallium-drivers= \
+            -Dgallium-drivers=freedreno \
             -Dglx=disabled \
             -Degl=disabled \
             -Dplatforms=x11,wayland \
@@ -135,13 +135,13 @@ jobs:
           fi
           echo "WSI present"
 
-          # gbm is deliberately left unset so Mesa derives it from
-          # system_has_kms_drm instead of us guessing: 'drm' is not a legal
-          # -Dplatforms value, and -Dgbm=enabled alone is rejected with 'GBM only
-          # supports DRM/KMS platforms' when that detection has not run.
+          # Mesa's GBM allocator is a gallium consumer: src/gbm hands out buffers
+          # by driving a pipe driver, so a Vulkan-only build (gallium-drivers
+          # empty) cannot contain gbm_bo_create no matter what -Dgbm says. That is
+          # why freedreno is now built as a gallium driver as well; Turnip itself
+          # is still the only Vulkan driver emitted.
           #
-          # Mesa's Wayland WSI allocates swapchain images through GBM. With
-          # gbm disabled the surface can be created and its capabilities
+          # Without GBM the surface can be created and its capabilities
           # queried — which is all vulkaninfo does, so earlier checks passed —
           # but the first real image allocation calls through a null allocator
           # and the process dies at pc=0x1. Gate on it.
