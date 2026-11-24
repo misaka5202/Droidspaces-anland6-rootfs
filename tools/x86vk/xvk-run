@@ -78,6 +78,12 @@ if [ "$(grep -ac 'kgsl-3d0' "$ROOT/usr/lib/libvulkan_freedreno.so" 2>/dev/null |
     die "this Turnip has no kgsl backend (grep kgsl-3d0 = 0); rebuild it with -Dfreedreno-kmds=kgsl"
 fi
 
+# A headless-only driver enumerates the GPU but cannot present, which looks like
+# success right up until a game tries to draw. Catch it here.
+if [ "$(grep -ac 'VK_KHR_wayland_surface' "$ROOT/usr/lib/libvulkan_freedreno.so" 2>/dev/null || echo 0)" -eq 0 ]; then
+    die "this Turnip has no window-system integration; rebuild with -Dplatforms=x11,wayland"
+fi
+
 if [ ! -f "$SHIM" ]; then
     command -v x86_64-linux-gnu-gcc >/dev/null 2>&1 \
         || die "x86_64-linux-gnu-gcc is needed once to build the call_once shim"
@@ -92,6 +98,21 @@ sed "s|\"library_path\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"library_path\": \"$
 
 trap restore_native EXIT INT TERM
 hide_native
+
+# Presentation needs the anland Wayland socket. X11 also works but asserts an
+# xauth cookie this container has no business holding, whereas the compositor's
+# own socket needs none. Verified on Adreno 735:
+#   Surface type  = VK_KHR_wayland_surface
+#   Present Modes = MAILBOX_KHR, FIFO_KHR
+# so a game can put pixels on screen, not merely submit compute.
+if [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d /run/user/1000 ]; then
+    XDG_RUNTIME_DIR=/run/user/1000
+    export XDG_RUNTIME_DIR
+fi
+if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -S /run/anland/wayland-0 ]; then
+    WAYLAND_DISPLAY=wayland-anland
+    export WAYLAND_DISPLAY
+fi
 
 BOX64_LOG=${BOX64_LOG:-0} \
 BOX64_LD_LIBRARY_PATH="$L" \
