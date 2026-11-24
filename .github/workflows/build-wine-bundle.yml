@@ -33,9 +33,12 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
+          # Only the x86_64 target is needed here. The wine metapackage and the
+          # mingw-w64 metapackage each drag in a full i686 toolchain as well, and
+          # that is what pushed this step past twenty minutes on a runner.
           sudo apt-get install -y --no-install-recommends \
-            wine64 wine mingw-w64 unzip
-          wine64 --version || wine --version
+            wine64 gcc-mingw-w64-x86-64 unzip
+          wine64 --version
 
       # The whole point of building this here: the runner is x86_64, so the exact
       # binaries we are about to ship can be executed before shipping them.
