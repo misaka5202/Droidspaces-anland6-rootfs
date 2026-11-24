@@ -180,16 +180,24 @@ jobs:
           rm -rf "$MINI"; mkdir -p "$MINI"
           # Relative, so the overlay lands at usr/... rather than nested under the
           # staging path.
-          W=usr/lib/x86_64-linux-gnu
-          mkdir -p "$MINI/usr/bin" "$MINI/$W/wine"
-          for f in "$STAGE"/usr/bin/wine64 "$STAGE"/usr/bin/wine; do
-            [ -e "$f" ] && cp -a "$f" "$MINI/usr/bin/"
+          #
+          # Select by path pattern, not by package: Ubuntu's wine 10 ships no
+          # /usr/bin/wine64 and no libwine.so at all. The real entry point is
+          # /usr/lib/x86_64-linux-gnu/wine/wine, and wine64 on PATH comes from the
+          # alternatives machinery, so package ownership tells us nothing useful.
+          mkdir -p "$MINI/usr/bin" "$MINI/usr/lib/x86_64-linux-gnu/wine"
+          for f in "$STAGE"/usr/bin/*wine*; do
+            [ -e "$f" ] && cp -a "$f" "$MINI/usr/bin/" || true
           done
-          # libwine plus the wineserver/unix halves, no PE tree.
-          cp -a "$STAGE/$W"/libwine.so* "$MINI/$W/" 2>/dev/null || true
+          # The unix half plus wineserver, and the launcher itself. Everything under
+          # x86_64-windows is the 589 MB PE tree and is deliberately left out.
+          W=usr/lib/x86_64-linux-gnu
           for d in x86_64-unix wineserver wine; do
             [ -e "$STAGE/$W/wine/$d" ] && cp -a "$STAGE/$W/wine/$d" "$MINI/$W/wine/"
           done
+          cp -a "$STAGE/$W"/libwine.so* "$MINI/$W/" 2>/dev/null || true
+          [ -d "$STAGE/usr/share/wine" ] && mkdir -p "$MINI/usr/share" && \
+            cp -a "$STAGE/usr/share/wine" "$MINI/usr/share/" || true
           du -sh "$MINI"
           # The overlay must carry absolute rootfs paths, not the staging prefix.
           if [ ! -d "$MINI/usr/lib" ]; then
