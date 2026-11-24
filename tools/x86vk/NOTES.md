@@ -95,6 +95,42 @@ entries as NULL and looked alarming; the cause was the harness not requesting
 `VK_KHR_surface`/`VK_KHR_wayland_surface` and `VK_KHR_swapchain`, without which
 the loader is *required* to return NULL. Requesting them makes the check valid.
 
+## The Windows layer runs under box64
+
+Built in CI (`build-wine-bundle.yml`) because pulling libwine:amd64 plus its
+181-package tree onto the device never finishes — the link drops around 20 MB of a
+205 MB download. The runner is x86_64, so it also *runs* the result before
+shipping it: `wine-selftest.c` is compiled to a Windows PE with mingw and executed
+under wine there.
+
+On the device, from a 6.9 MB minimal bundle:
+
+```
+$ box64 /opt/wine/usr/lib/x86_64-linux-gnu/wine/wine --version
+wine-10.0 (Ubuntu 10.0~repack-12ubuntu1)
+```
+
+Two artifacts are published on purpose:
+
+| artifact | size | purpose |
+|---|---|---|
+| `wine-mini-x86_64` | 6.9 MB | launcher, x86_64-unix half, wineserver, dependencies — proves the chain starts |
+| `wine-bundle-x86_64` | 209 MB | adds the builtin PE dlls, needed once a Windows program actually executes |
+
+Things worth knowing before editing that workflow:
+
+- Ubuntu's wine 10 ships **no** `/usr/bin/wine64` and **no** `libwine.so`. The real
+  entry point is `/usr/lib/x86_64-linux-gnu/wine/wine`, and `wine64` on PATH comes
+  from the alternatives system. Select payload files by path, not by package
+  ownership.
+- wine's `ntdll.so` needs `libunwind.so.8`, which apt does **not** install for
+  `wine64`. Without it wine cannot dlopen ntdll at all.
+- Bundled sonames are symlinks to versioned files. `cp -a` copies the link and
+  leaves it dangling, and tar then drops it — the payload reports the library as
+  bundled while the archive does not contain it. Use `cp -L`.
+- Cache `/var/cache/apt/archives`: the wine download alone has taken both two
+  minutes and over twenty depending on runner throughput.
+
 ## Historical note: the xdg-shell stall
 
 Even with the driver side solved, vkcube selects the GPU and then stalls in
