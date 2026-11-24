@@ -80,6 +80,7 @@ jobs:
             -Dgallium-drivers=freedreno \
             -Dglx=disabled \
             -Degl=disabled \
+            -Dgbm=enabled \
             -Dplatforms=x11,wayland \
             -Dllvm=disabled \
             -Dvideo-codecs= \
@@ -137,9 +138,11 @@ jobs:
 
           # Mesa's GBM allocator is a gallium consumer: src/gbm hands out buffers
           # by driving a pipe driver, so a Vulkan-only build (gallium-drivers
-          # empty) cannot contain gbm_bo_create no matter what -Dgbm says. That is
-          # why freedreno is now built as a gallium driver as well; Turnip itself
-          # is still the only Vulkan driver emitted.
+          # empty) cannot contain gbm_bo_create no matter what -Dgbm says, and
+          # -Dgbm=enabled on its own is rejected with 'GBM only supports DRM/KMS
+          # platforms' when system_has_kms_drm has not resolved. Both conditions
+          # are now met: freedreno is built as a gallium driver and gbm is asked
+          # for explicitly. Turnip is still the only Vulkan driver emitted.
           #
           # Without GBM the surface can be created and its capabilities
           # queried — which is all vulkaninfo does, so earlier checks passed —
