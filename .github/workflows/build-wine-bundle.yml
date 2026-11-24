@@ -90,6 +90,12 @@ jobs:
           done
           echo "--- wine dll dirs ---"
           du -sh "$STAGE"/usr/lib/x86_64-linux-gnu/wine/* 2>/dev/null | sort -hr | head -6
+          echo "--- launcher and libwine, wherever they landed ---"
+          find "$STAGE" -maxdepth 5 -name 'wine64' 2>/dev/null | head -5 || true
+          find "$STAGE" -maxdepth 5 -name 'wine' 2>/dev/null | head -5 || true
+          find "$STAGE" -maxdepth 5 -name 'libwine.so*' 2>/dev/null | head -5 || true
+          echo "--- staged usr/bin ---"
+          ls -l "$STAGE/usr/bin" 2>/dev/null | head -12 || true
 
           # Anything wine's own binaries need that is not in a base image is listed
           # rather than bundled: box64 wraps host libraries, so an x86_64 copy is
