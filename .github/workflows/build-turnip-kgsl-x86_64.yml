@@ -49,7 +49,7 @@ jobs:
           # libxcb-shm-dev) and a single wrong name must not fail the whole job.
           for p in libx11-dev libx11-xcb-dev libxcb1-dev libxcb-dri3-dev \
                    libxcb-present-dev libxcb-shm0-dev libxcb-randr0-dev \
-                   libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev; do
+                   libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev                    libxrandr-dev libxfixes-dev; do
             sudo apt-get install -y --no-install-recommends "$p" \
               || echo "::warning::optional package unavailable: $p"
           done
