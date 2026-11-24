@@ -382,6 +382,13 @@ x86_64(box64): P1 layers=5 P3 实例 P4 devices=3 P5 PanVK P6b 设备 P7 submit/
 
 wine 层：Kron4ek wine-10.0 amd64 + DXVK 2.7.1 部署中，见工具 `tools/x86vk/` 的 d3d9 探针（`Direct3DCreate9` 触发 DXVK→Vulkan 全链）。
 
+### 12.4 wine/DXVK 现状（本次会话结束时）
+
+- **Kron4ek wine-10.0-amd64 在 box64 下 `wineboot -u` rc=0**，prefix 完整（786 文件）。Ubuntu 官方 `wine64:amd64` 不可用（PE 链缺 zlib1/libwinpthread 依赖，repack 泄漏）。
+- **DXVK 2.1 / 2.7.1 / 3.1.1 三代一致**：`system32/d3d9.dll`（MZ 确认被 wine 加载，日志 `Loaded module ...d3d11.dll at 7fffa f0000`）、panvk 非一致性警告出现，但 `Direct3DCreate9` 返回 NULL、`D3D11CreateDevice` 返回 `0x887a0004 (DXGI_ERROR_UNSUPPORTED)`。
+- 已排除：DllOverrides 语法、native vulkan-1 stub、DXVK 版本 gate（2.1 无 EDS 要求同样失败）、registry override。未排除：wine10 对 mingw 编译 PE 的加载路径、box64 对 DXVK PE 的重定位/SEH 行为。**这是高通/MTK 共有的 open item，非 panvk 独有**——高通侧此前只验证过 wine --version + 纯 C selftest，从未跑过 wineboot+DXVK。
+- 排查入口：`tools/x86vk/d3d9t3.c`（含部署命令注释）、prefix `/root/kwp`、日志 `/root/n_*.log`、`/root/full.log`（WINEDEBUG=+all 全 trace 在手）。
+
 ---
 
 *报告基于 2026-11 期间的实机验证。所有数据来自设备实测，未验证项已在第 7 节明确标注。*
