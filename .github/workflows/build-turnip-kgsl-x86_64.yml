@@ -80,7 +80,7 @@ jobs:
             -Dgallium-drivers= \
             -Dglx=disabled \
             -Degl=disabled \
-            -Dgbm=disabled \
+            -Dgbm=enabled \
             -Dplatforms=x11,wayland \
             -Dllvm=disabled \
             -Dvideo-codecs= \
@@ -135,6 +135,19 @@ jobs:
             exit 1
           fi
           echo "WSI present"
+
+          # Mesa's Wayland WSI allocates swapchain images through GBM. With
+          # -Dgbm=disabled the surface can be created and its capabilities
+          # queried — which is all vulkaninfo does, so earlier checks passed —
+          # but the first real image allocation calls through a null allocator
+          # and the process dies at pc=0x1. Gate on it.
+          echo "--- GBM allocator ---"
+          if grep -aq 'gbm_bo_create' "$SO"; then
+            echo "  ok   gbm_bo_create"
+          else
+            echo "::error::no GBM allocator; swapchain creation would crash at first present"
+            exit 1
+          fi
           # With libstdc++ linked statically the once-call state becomes
           # library-local, so the driver should carry no dynamic dependency on
           # libstdc++ and no TLSDESC relocation for __once_call — the exact
