@@ -71,7 +71,10 @@ jobs:
           # A per-file bash loop over the wine packages takes tens of thousands of
           # process spawns and stalls the job; hand the filtered list to tar so it
           # happens in one pass.
-          { dpkg -L wine64; dpkg -L libwine; dpkg -L wine; dpkg -L wine-common; } 2>/dev/null > /tmp/allpaths.txt
+          # Each dpkg -L is guarded: a package that is not installed exits non-zero,
+          # and inside a brace group under set -e that aborts the whole step with no
+          # output at all.
+          { dpkg -L wine64 || true; dpkg -L libwine || true; dpkg -L wine || true; dpkg -L wine-common || true; } 2>/dev/null > /tmp/allpaths.txt
           grep -vE '^(/usr/share/(doc|man|lintian|locale)/|\.\.?$)' /tmp/allpaths.txt > /tmp/f1.txt
           grep -vE '\.(a|la)$' /tmp/f1.txt > /tmp/f2.txt
           grep -vE '/wine/(i386|i386-windows|i386-unix)' /tmp/f2.txt > /tmp/f3.txt
