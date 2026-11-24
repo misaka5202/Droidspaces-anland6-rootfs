@@ -202,12 +202,23 @@ jobs:
             echo "::warning::bundle exceeds 200 MB; consider trimming wine dlls"
           fi
 
-      - uses: actions/upload-artifact@v6
+      # Separate artifacts: the mini bundle is 2.4 MB and exists so the first
+      # contact test needs nothing more, while the full payload is 191 MB. Bundled
+      # together, fetching the small one would mean pulling the large one.
+      - name: Upload the minimal bundle
+        uses: actions/upload-artifact@v6
+        with:
+          name: wine-mini-x86_64
+          path: wine-mini.tar.zst
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the full bundle
+        uses: actions/upload-artifact@v6
         with:
           name: wine-bundle-x86_64
           path: |
             wine-bundle.tar.zst
-            wine-mini.tar.zst
             SHA256SUMS
           if-no-files-found: error
           retention-days: 14
