@@ -113,7 +113,11 @@ jobs:
                 | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((a["browser_download_url"] for a in d["assets"] if a["name"].endswith(".tar.gz")), ""))')
           [ -n "$url" ] || { echo "::error::no DXVK tarball in release $tag"; exit 1; }
           curl -fsSL --retry 3 -o /tmp/dxvk.tar.gz "$url"
-          tar -tzf /tmp/dxvk.tar.gz | head -12
+          # -tzf into head closes the pipe early, and tar then dies writing to a
+          # closed stdout; under pipefail that fails the step. List to a file and
+          # read the head of it instead.
+          tar -tzf /tmp/dxvk.tar.gz > /tmp/dxvk-list.txt
+          head -12 /tmp/dxvk-list.txt
           mkdir -p /tmp/dxvk && tar -xzf /tmp/dxvk.tar.gz -C /tmp/dxvk --strip-components=1
           ls -l /tmp/dxvk/x64/ 2>/dev/null || ls -R /tmp/dxvk | head -20
 
