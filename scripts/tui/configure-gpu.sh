@@ -173,10 +173,16 @@ configure_mediatek() {
         # 由此拿到真 GPU；bionic 库只能经 android_dlopen 加载，所以不走
         # icd.d/ICD json，走 LIBVULKAN（与 LIBEGL/LIBGLESV2 同一套开关）。
         # 没装 panvk 时保持默认（厂商 blob 的 Android Vulkan loader）。
-        if [ -e "${ROOTFS_DIR:-}/usr/local/share/panvk/panvk.env" ] \
+        if [ -e "${ROOTFS_DIR:-}/opt/panvk/libvulkan_panfrost_g.so" ]; then
+            # glibc 原生构建（build-panvk-glibc.sh）：/etc/vulkan/icd.d/panvk_g.json
+            # 已由标准 loader 加载，box64/wine 与本机程序同一入口，无需 LIBVULKAN。
+            # 注意：/etc/environment 里残留的 HYBRIS_* 会把 dlopen 导到 bionic
+            # linker（报 namespace "(default)"），glibc 直用场景要清掉或 env -i。
+            log "MTK：Vulkan = PanVK(glibc 构建)，标准 loader 直连 /dev/mali0"
+        elif [ -e "${ROOTFS_DIR:-}/usr/local/share/panvk/panvk.env" ] \
            && [ -e "${ROOTFS_DIR:-}/usr/local/lib/vulkan/panvk/libvulkan_panfrost.so" ]; then
             append_env "LIBVULKAN=/usr/local/lib/vulkan/panvk/libvulkan_panfrost.so"
-            log "MTK：Vulkan = Mesa PanVK on kbase（DXVK/Zink 走真 GPU）"
+            log "MTK：Vulkan = Mesa PanVK on kbase（hybris LIBVULKAN，DXVK/Zink 走真 GPU）"
         fi
         log "MTK：渲染路径 = libhybris + 厂商 Mali（需宿主 mali_nsfix）"
     else

@@ -9,6 +9,7 @@ ARG ENABLE_binfmt_ARG
 ARG ENABLE_yj_ARG
 ARG ENABLE_mesa_ARG
 ARG GPU_VENDOR_ARG=qualcomm
+ARG PANVK_GLIBC_ARG=true
 ARG ENABLE_kfgj_ARG
 ARG ENABLE_zip_ARG
 ARG ENABLE_docker_ARG
@@ -41,6 +42,7 @@ COPY scripts/tui/droidspaces-tui.sh /usr/local/bin/droidspaces-tui
 COPY scripts/tui/droidspaces-gpu.sh /usr/local/bin/droidspaces-gpu
 COPY scripts/hybris/setup-mali-hybris.sh /usr/local/sbin/setup-mali-hybris
 COPY scripts/tui/install-panvk.sh /usr/local/sbin/install-panvk
+COPY scripts/tui/build-panvk-glibc.sh /usr/local/sbin/build-panvk-glibc
 COPY scripts/hybris/ /usr/local/share/mali-hybris/
 COPY scripts/install-desktop.sh /usr/local/sbin/install-desktop
 COPY scripts/configure-desktop.sh /usr/local/sbin/configure-desktop
@@ -75,7 +77,7 @@ RUN echo '%_install_langs all' > /etc/rpm/macros.image-language-conf && \
     echo "fastestmirror=True" >> /etc/dnf/dnf.conf && \
     echo "defaultyes=True" >> /etc/dnf/dnf.conf
 
-RUN chmod +x /usr/local/sbin/install-anland-next /usr/local/sbin/install-anland6 /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-panvk /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/anland-apps /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
+RUN chmod +x /usr/local/sbin/install-anland-next /usr/local/sbin/install-anland6 /usr/local/sbin/install-mesa /usr/local/sbin/configure-gpu /usr/local/sbin/setup-mali-hybris /usr/local/sbin/install-panvk /usr/local/sbin/build-panvk-glibc /usr/local/sbin/install-hangover-wine /usr/local/sbin/install-winefonts /usr/local/sbin/install-steam /usr/local/sbin/install-desktop /usr/local/sbin/configure-desktop /usr/local/sbin/configure-chrome /usr/local/bin/anland-apps /usr/local/bin/droidspaces-tui /usr/local/bin/droidspaces-gpu /usr/local/bin/start-desktop-session /usr/local/lib/droidspaces/desktops/*.sh && \
     ln -s droidspaces-tui /usr/local/bin/dstui && \
     ln -s droidspaces-tui /usr/local/bin/ds-tui && \
     dnf install -y --setopt=install_weak_deps=False \
@@ -213,7 +215,13 @@ EOF
     # /opt/hy/inst/lib/libEGL.so 并选择硬件路径；否则它会走 llvmpipe 回退分支。
     if [ "${GPU_VENDOR_ARG:-qualcomm}" = "mediatek" ]; then
         DSHY_BUILD=1 /usr/local/sbin/setup-mali-hybris
-        DSHY_BUILD=1 /usr/local/sbin/install-panvk
+        # glibc-built PanVK works with the stock loader; the NDK zip aborts in
+        # bionic jemalloc inside glibc hosts (see build-panvk-glibc.sh).
+        if [ "${PANVK_GLIBC_ARG:-true}" = "true" ]; then
+            /usr/local/sbin/build-panvk-glibc || { echo "panvk glibc build failed, falling back to NDK zip"; DSHY_BUILD=1 /usr/local/sbin/install-panvk || true; }
+        else
+            DSHY_BUILD=1 /usr/local/sbin/install-panvk
+        fi
     fi
 # GPU 厂商相关的环境变量：高通走 kgsl，MTK 走 libhybris + 厂商 Mali
     /usr/local/sbin/configure-gpu "${GPU_VENDOR_ARG:-qualcomm}" \

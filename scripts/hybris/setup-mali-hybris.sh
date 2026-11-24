@@ -251,6 +251,13 @@ build_libhybris() {
         [ -d android-headers ] || git clone --depth 1 -b herrie/halium-14.0 https://github.com/Halium/android-headers >/dev/null 2>&1
         [ -d dhy ] || git clone --depth 1 -b feature/mali-desktop https://github.com/ravindu644/libhybris dhy >/dev/null 2>&1
         cd $HY_ROOT/dhy/hybris || exit 1
+        # 上报验证过的 vulkan.c（ICD fallback + glibc: 后端），见 patch-vulkan-icd.sh。
+        # 资产目录：镜像里是 /usr/local/share/mali-hybris，脚本直跑时是脚本目录。
+        ASSETS=/usr/local/share/mali-hybris
+        [ -d \"\$ASSETS\" ] || ASSETS=$(cd "$(dirname "$0")" && pwd)
+        sh \"\$ASSETS/patch-vulkan-icd.sh\" HY=$HY_ROOT || true
+        SHIM_INC=
+        [ -f \"\$ASSETS/ndk_shim.h\" ] && SHIM_INC=\"-include \$ASSETS/ndk_shim.h\"
         # autotools 三步的输出全部留档：失败时 RUN 会继续走到 configure-gpu 的
         # 软渲染回退，构建看起来仍然全绿——有日志才能事后追因。
         {
@@ -262,8 +269,8 @@ build_libhybris() {
                 --enable-mali-quirks --enable-debug --enable-property-cache=no \
                 --with-android-headers=$HY_ROOT/android-headers \
                 --with-default-hybris-ld-library-path=/vendor/lib64/egl:/vendor/lib64:/system/lib64:/apex/$VNDK/lib64 \
-                CFLAGS='-O1 -g -DDEBUG -D_Nonnull= -D_Nullable=' \
-                CXXFLAGS='-O1 -g -DDEBUG -D_Nonnull= -D_Nullable='
+                CFLAGS=\"-O1 -g -DDEBUG -D_Nonnull= -D_Nullable= \$SHIM_INC\" \
+                CXXFLAGS=\"-O1 -g -DDEBUG -D_Nonnull= -D_Nullable= \$SHIM_INC\"
             make -j\"\$(nproc)\"
             make -k install
         } > $HY_ROOT/build.log 2>&1 || true

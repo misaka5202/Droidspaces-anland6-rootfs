@@ -214,6 +214,7 @@ docker buildx build \
   --build-arg ENABLE_yj_ARG="$ENABLE_yj" \
   --build-arg ENABLE_mesa_ARG="$ENABLE_mesa" \
   --build-arg GPU_VENDOR_ARG="$GPU_VENDOR" \
+  --build-arg PANVK_GLIBC_ARG="${PANVK_GLIBC_ARG:-true}" \
   --build-arg ANLAND_MAJOR_ARG="${ANLAND_MAJOR:-6}" \
   --build-arg ANLAND6_VERSION="${ANLAND6_VERSION:-6.2}" \
   --build-arg ANLAND6_XWAYLAND="${ANLAND6_XWAYLAND:-0}" \
