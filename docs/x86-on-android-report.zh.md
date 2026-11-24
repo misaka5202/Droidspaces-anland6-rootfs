@@ -353,4 +353,35 @@ wine-10.0 (Ubuntu 10.0~repack-12ubuntu1)
 
 ---
 
+## 12. MTK 路线复刻成功（2026-11-25，mt6989 / Immortalis-G715）
+
+高通平板的结论（box64 包 host aarch64 libvulkan）在 MTK 上撞了新的墙，最终换道打通：
+
+### 12.1 三堵墙与最终通道
+
+| 墙 | 现象 | 结局 |
+|---|---|---|
+| NDK 版 mali-panvk 在 glibc 容器加载 | `vkCreateInstance` 里 bionic jemalloc `Error setting TSD` abort；hybris `android_dlopen` 与 bionic 预热都救不了 | **绕开**：驱动只依赖 `/dev/mali0` ioctl/mmap，glibc 原生重编 |
+| hybris libvulkan 补丁链 | vulkan.c 三缺陷（gipa NULL 解引用 / IDLOAD 不认 ICD / LIBVULKAN 只吃 bionic）逐一打补丁后 aarch64 P1–P2 通过 | **封存**：glibc 构建出现后不再需要（补丁仍入库） |
+| Ubuntu wine64:amd64 multiarch | 真 PE 依赖 zlib1.dll/libwinpthread，libwine 包不发，wineboot 半途崩 | **换 Kron4ek Wine-Builds**（box64 官方推荐） |
+
+### 12.2 glibc PanVK 构建配方（`scripts/tui/build-panvk-glibc.sh`）
+
+- stage1 原生构建 mesa_clc / vtn_bindgen2 / panfrost_compile；stage2 `-Dplatforms=`（空，绕开被 fork 删除的 src/loader）+ `-Dmesa-clc=system`。
+- 容器实测全程 13 分钟（D9300 大核），产物 24MB。
+- 部署要点：`/etc/vulkan/icd.d/panvk_g.json` + **封存 hybris 的 libvulkan.so.1**（`.hybris-off`，否则 `/etc/environment` 的 LD_LIBRARY_PATH 把 ICD 拐进 bionic linker 报 namespace 错）。
+- kbase 协议备忘：ioctl magic `0x80`；CSF 握手 `CSF_VERSION_CHECK(_IOWR,52,{u16,u16})` 先行（nr=0 对 CSF 是拒答的 dummy），`SET_FLAGS` 必须在 tracking page mmap 之前。
+
+### 12.3 实测结果
+
+```
+aarch64: vulkaninfo → PanVK-G720-Immortalis MC12, Vulkan 1.4.363, ICD iface v5
+x86_64(box64): P1 layers=5 P3 实例 P4 devices=3 P5 PanVK P6b 设备 P7 submit/fence 全 rc=0
+               [BOX64] Using native(wrapped) libvulkan.so.1
+```
+
+wine 层：Kron4ek wine-10.0 amd64 + DXVK 2.7.1 部署中，见工具 `tools/x86vk/` 的 d3d9 探针（`Direct3DCreate9` 触发 DXVK→Vulkan 全链）。
+
+---
+
 *报告基于 2026-11 期间的实机验证。所有数据来自设备实测，未验证项已在第 7 节明确标注。*

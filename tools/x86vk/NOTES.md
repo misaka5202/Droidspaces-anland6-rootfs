@@ -158,3 +158,44 @@ XCB failed to connect to the X server
 
 The rootless Xwayland started by anland-session asserts an xauth cookie that the
 container does not hold. That, not the driver, is the next thing to fix.
+
+## MTK (mt6989 / Immortalis-G715): the driver must be glibc-native
+
+2026-11-25 run on Dimensity 9300. Three walls, one door:
+
+1. **NDK mali-panvk cannot run inside a glibc container at all** — its static
+   bionic jemalloc dies in `vkCreateInstance` with `Error setting TSD` + abort,
+   whether the ICD is reached through hybris `android_dlopen` (probe5) or the
+   bionic-warm path. No env knob fixes this.
+2. **hybris vulkan.c needed three patches** (shipped as
+   `scripts/hybris/vulkan-icd-glibc.c` + `patch-vulkan-icd.sh`): gipa lazy-init
+   guard, `vk_icd*` fallback wired into `VULKAN_IDLOAD`, and a `glibc:` prefix
+   for `LIBVULKAN`. Verified `layers=0` through the ICD path on-device.
+3. **The door is building mali-panvk natively** (`probe6-glibc-panvk.c`,
+   recipe = `scripts/tui/build-panvk-glibc.sh`): two-stage meson,
+   `-Dplatforms=` (the fork deleted `src/loader`), `mesa-clc=system`. Result:
+   stock Khronos loader enumerates `PanVK-G720-Immortalis MC12` Vulkan 1.4.363,
+   device/queue/fence complete (`GLIBC-PANVK-CHAIN-OK` pending final run), and
+   **box64 + the x86_64 probe reaches submit+fence rc=0** (`probe7-x86vk.c`:
+   `X86-ON-MTK-GPU-CHAIN-OK`).
+
+Deployment traps confirmed the hard way:
+
+- `/etc/environment` carries the image's `LD_LIBRARY_PATH=/opt/hy/inst/lib`;
+  any glibc-side Vulkan client then picks the hybris loader and every ICD
+  dlopen hits the bionic linker (`namespace "(default)"` errors). Use
+  `env -i` or seal the hybris libvulkan.so.1 (build script renames it to
+  `.hybris-off`).
+- Ubuntu `wine64:amd64` multiarch PEs import `zlib1.dll`/`libwinpthread` that
+  `libwine:amd64` does not ship (repack build leak); `wineboot` dies at
+  user32. Kron4ek Wine-Builds (`wine-10.0-amd64.tar.xz`) boots cleanly under
+  box64 (`wineboot -u` rc=0, prefix 786 files).
+- kbase on MTK answers `CSF_VERSION_CHECK(_IOWR(0x80,52,{u16,u16}))` with
+  1.21 and `SET_FLAGS` fine from the container (see `malitest` recipe in
+  docs/x86-on-android-report.zh.md §12).
+
+Status at end of session: GPU chain x86_64→wine→DXVK verified up to VkInstance
+through d3d9.dll (DXVK 2.7.1 loads from system32 as native, panvk warning
+appears); `Direct3DCreate9` returns NULL — DXVK adapter probe vs panvk is the
+open item; DXVK 3.1.1 is the next attempt (robustness2 is the known panvk
+feature DXVK 2.x may reject without the newer feature set).
