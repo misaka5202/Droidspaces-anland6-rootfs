@@ -138,6 +138,34 @@ jobs:
           done
           echo "DXVK dlls staged"
 
+      # Layer the output: the full payload is 191 MB compressed and the link to
+      # the device drops long before that, but verifying that box64 can start wine
+      # at all needs almost none of it. The 589 MB of builtin PE dlls are only
+      # touched once a program actually runs, so a minimal bundle isolates the
+      # launcher, the unix side and wineserver.
+      - name: Pack a minimal bundle for first-contact testing
+        run: |
+          set -euo pipefail
+          STAGE=/tmp/stage
+          MINI=/tmp/mini
+          rm -rf "$MINI"; mkdir -p "$MINI"
+          W="$STAGE/usr/lib/x86_64-linux-gnu"
+          mkdir -p "$MINI/usr/bin" "$MINI$W/wine" "$MINI/opt/dxvk"
+          for f in "$STAGE/usr/bin/wine64" "$STAGE/usr/bin/wine"; do
+            [ -e "$f" ] && cp -a "$f" "$MINI/usr/bin/"
+          done
+          # libwine plus the wineserver/unix halves, no PE tree.
+          cp -a "$W"/libwine.so* "$MINI$W/" 2>/dev/null || true
+          for d in x86_64-unix wineserver wine; do
+            [ -e "$W/wine/$d" ] && cp -a "$W/wine/$d" "$MINI$W/wine/"
+          done
+          du -sh "$MINI"
+          cd "$MINI"
+          tar --zstd -cf "$GITHUB_WORKSPACE/wine-mini.tar.zst" .
+          cd "$GITHUB_WORKSPACE"
+          ls -lh wine-mini.tar.zst
+          echo "mini=$(stat -c%s wine-mini.tar.zst)" >> "$GITHUB_ENV"
+
       - name: Write a manifest and pack
         run: |
           set -euo pipefail
@@ -164,7 +192,8 @@ jobs:
 
       - name: Report size
         run: |
-          echo "bundle size: $((size / 1024 / 1024)) MB"
+          echo "full bundle:  $((size / 1024 / 1024)) MB"
+          echo "mini bundle:  $((mini / 1024 / 1024)) MB (first-contact test only)"
           if [ "$size" -gt 209715200 ]; then
             echo "::warning::bundle exceeds 200 MB; consider trimming wine dlls"
           fi
@@ -174,6 +203,7 @@ jobs:
           name: wine-bundle-x86_64
           path: |
             wine-bundle.tar.zst
+            wine-mini.tar.zst
             SHA256SUMS
           if-no-files-found: error
           retention-days: 14
