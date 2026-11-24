@@ -81,7 +81,7 @@ jobs:
             -Dglx=disabled \
             -Degl=disabled \
             -Dgbm=disabled \
-            -Dplatforms= \
+            -Dplatforms=x11,wayland \
             -Dllvm=disabled \
             -Dvideo-codecs= \
             -Dcpp_link_args="-static-libstdc++ -static-libgcc" \
@@ -107,6 +107,7 @@ jobs:
           echo "file: $(file -b "$SO")"
           n_dev=$(grep -ac 'kgsl-3d0' "$SO" || true)
           n_kgsl=$(grep -ac 'kgsl' "$SO" || true)
+          wsi_missing=0
           echo "kgsl-3d0 occurrences: $n_dev"
           echo "kgsl occurrences    : $n_kgsl"
           echo "(reference: Arch desktop build = 0 and 1; aarch64 Android build = 1 and 13)"
@@ -115,6 +116,25 @@ jobs:
             exit 1
           fi
           echo "kgsl backend present"
+
+          # Headless-only is useless here: a game has to present to an anland
+          # window, and with -Dplatforms= the driver exposes only
+          # VK_EXT_headless_surface (present support false), which is exactly the
+          # state this build was in before. Require the real surface extensions.
+          echo "--- WSI surface extensions ---"
+          for ext in VK_KHR_xcb_surface VK_KHR_xlib_surface VK_KHR_wayland_surface; do
+            if grep -aq "$ext" "$SO"; then
+              echo "  ok   $ext"
+            else
+              echo "  MISS $ext"
+              wsi_missing=$((wsi_missing + 1))
+            fi
+          done
+          if [ "${wsi_missing:-0}" -gt 0 ]; then
+            echo "::error::the driver has no usable window-system integration; a game could not present"
+            exit 1
+          fi
+          echo "WSI present"
           # With libstdc++ linked statically the once-call state becomes
           # library-local, so the driver should carry no dynamic dependency on
           # libstdc++ and no TLSDESC relocation for __once_call — the exact
