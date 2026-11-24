@@ -91,6 +91,16 @@ jobs:
           while IFS= read -r f; do [ -e "$f" ] && echo "$f"; done < /tmp/filelist.raw > /tmp/filelist.txt
 
           echo "files to stage: $(wc -l < /tmp/filelist.txt)"
+
+          # The staging tree came out with no launcher and no libwine at all, so the
+          # package names assumed above are wrong. Print what is actually installed
+          # and where its files are, rather than guessing again.
+          echo "--- installed wine packages ---"
+          dpkg -l | awk '/^ii/ && /wine/ {print "  " $2 " " $3}' || true
+          echo "--- those packages own these launcher/libwine files ---"
+          for p in $(dpkg -l | awk '/^ii/ && /wine/ {print $2}'); do
+            dpkg -L "$p" 2>/dev/null | grep -E '(/wine64$|/wine$|libwine\.so)' || true
+          done | sort -u | head -12
           tar -cf - --no-recursion -T /tmp/filelist.txt 2>/dev/null | tar -xf - -C "$STAGE"
           echo "--- staged size by subtree ---"
           du -sh "$STAGE"
