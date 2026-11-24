@@ -65,37 +65,22 @@ jobs:
           STAGE=/tmp/stage
           mkdir -p "$STAGE"
 
-          # Frame the bundle as a rootfs overlay so extraction on the device needs
-          # no path juggling.
-          collect() {
-            while IFS= read -r f; do
-              [ -e "$f" ] || continue
-              case "$f" in
-                # 32-bit halves are dead weight: this device stack is x86_64 only.
-                */wine/i386*|*/wine/*/i386-*|*/wine/i386-windows/*|*/wine/i386-unix/*) continue ;;
-                *.a|*.la) continue ;;
-                /usr/share/doc/*|/usr/share/man/*|/usr/share/lintian/*) continue ;;
-              esac
-              mkdir -p "$STAGE$(dirname "$f")"
-              cp -a "$f" "$STAGE$f" 2>/dev/null || true
-            done
-          }
+          # A per-file bash loop over the wine packages takes tens of thousands of
+          # process spawns and stalls the job; hand the filtered list to tar so it
+          # happens in one pass.
+          { dpkg -L wine64; dpkg -L libwine; dpkg -L wine; dpkg -L wine-common; } 2>/dev/null             | sort -u             | grep -vE '^(/usr/share/(doc|man|lintian|locale)/|\.\.?$)'             | grep -vE '\.(a|la)$'             | grep -vE '/wine/(i386|i386-windows|i386-unix)'             | grep -v '^/usr/lib/wine/i386'             | while IFS= read -r f; do [ -e "$f" ] && echo "$f"; done > /tmp/filelist.txt
 
-          for pkg in wine64 libwine wine wine-common; do
-            dpkg -L "$pkg" 2>/dev/null | collect || true
-          done
-
-          # Anything wine's own binaries need that is not part of a base image is
-          # listed here rather than bundled: box64 wraps host libraries, so an
-          # x86_64 copy is usually the wrong answer. This list is what to revisit
-          # if the device reports a missing soname.
-          echo "--- non-base libraries wine64 links against ---"
-          ldd "$(command -v wine64)" 2>/dev/null | awk '{print $1}' | sort -u | head -30
-
+          echo "files to stage: $(wc -l < /tmp/filelist.txt)"
+          tar -cf - --no-recursion -T /tmp/filelist.txt 2>/dev/null | tar -xf - -C "$STAGE"
           echo "--- staged size ---"
           du -sh "$STAGE"
-          echo "--- largest staged directories ---"
-          du -h --max-depth=3 "$STAGE/usr" 2>/dev/null | sort -hr | head -12
+
+          # Anything wine's own binaries need that is not in a base image is listed
+          # rather than bundled: box64 wraps host libraries, so an x86_64 copy is
+          # usually the wrong answer. Revisit this list if the device reports a
+          # missing soname.
+          echo "--- libraries wine64 links against ---"
+          ldd "$(command -v wine64)" 2>/dev/null | awk '{print $1}' | sort -u | head -30
 
       - name: Fetch DXVK
         env:
