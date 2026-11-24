@@ -79,6 +79,22 @@ presentation`), so a client falls back to llvmpipe and then dies on
 `Illegal instruction` under emulation. Wayland is the only path that reaches the
 GPU, because its dmabuf path can hand kgsl buffers straight through.
 
+## Entry points all resolve under the wrapping layer
+
+`procaddr.c` walks every Vulkan entry a loader-heavy consumer reaches through
+`vkGetInstanceProcAddr` / `vkGetDeviceProcAddr` rather than by linking, because
+that is how DXVK reaches Vulkan: a missing pointer there becomes a NULL
+dereference deep inside Windows code.
+
+```
+summary instance 22/22 device 96/96     rc=0
+```
+
+All 118 resolve. The first run of this check reported surface and swapchain
+entries as NULL and looked alarming; the cause was the harness not requesting
+`VK_KHR_surface`/`VK_KHR_wayland_surface` and `VK_KHR_swapchain`, without which
+the loader is *required* to return NULL. Requesting them makes the check valid.
+
 ## Historical note: the xdg-shell stall
 
 Even with the driver side solved, vkcube selects the GPU and then stalls in
