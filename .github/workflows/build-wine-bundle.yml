@@ -29,13 +29,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # wine64 pulls roughly 200 MB from the archive and runner throughput to it
+      # varies wildly — the same install has taken both two minutes and over
+      # twenty. Keep the downloaded debs so a rerun after a workflow edit does not
+      # pay for them again. actions/cache restores here and saves on completion.
+      - name: Restore the apt download cache
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-wine-${{ runner.os }}-v1
+
       - name: Install wine and a cross compiler for the self-test
         run: |
           set -euo pipefail
-          sudo apt-get update
-          # Only the x86_64 target is needed here. The wine metapackage and the
-          # mingw-w64 metapackage each drag in a full i686 toolchain as well, and
-          # that is what pushed this step past twenty minutes on a runner.
+          sudo apt-get update -o Acquire::Retries=5
+          # Only the x86_64 target is needed. The wine and mingw-w64 metapackages
+          # each drag in a full i686 toolchain as well.
           sudo apt-get install -y --no-install-recommends \
             wine64 gcc-mingw-w64-x86-64 unzip
           wine64 --version
