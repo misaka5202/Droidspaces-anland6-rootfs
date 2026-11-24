@@ -144,6 +144,25 @@ jobs:
           done < /tmp/needed.txt
           echo "  unresolved: $missing"
 
+          # Copy the non-base libraries the modules need into the staging tree.
+          # They resolve on the runner because apt installed them there, but a
+          # dependency the bundle does not carry is still missing on the device.
+          echo "--- pulling non-base dependencies into the payload ---"
+          while IFS= read -r lib; do
+            [ -n "$lib" ] || continue
+            case "$lib" in
+              libc.so.6|libm.so.6|libpthread.so.0|libdl.so.2|librt.so.1|libresolv.so.2|libutil.so.1|ld-linux-x86-64.so.2) continue ;;
+            esac
+            src=$(find /usr/lib/x86_64-linux-gnu -maxdepth 1 -name "$lib" 2>/dev/null | head -1)
+            if [ -n "$src" ]; then
+              mkdir -p "$STAGE/usr/lib/x86_64-linux-gnu"
+              cp -a "$src" "$STAGE/usr/lib/x86_64-linux-gnu/" 2>/dev/null || true
+              echo "  bundled $lib"
+            fi
+          done < /tmp/needed.txt
+          echo "--- staged size after dependency bundling ---"
+          du -sh "$STAGE"
+
       - name: Fetch DXVK
         env:
           GH_TOKEN: ${{ github.token }}
