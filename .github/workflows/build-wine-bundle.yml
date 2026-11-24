@@ -1,0 +1,176 @@
+# Bundle x86_64 Wine + DXVK for the on-device container.
+#
+# Step 2 of the container plan needs a Windows layer that runs under box64. Doing
+# that on the device means pulling libwine:amd64 (205 MB) plus a 181-package
+# dependency tree over a link that drops long before finishing. The runner is
+# x86_64, so it downloads and unpacks at datacentre speed, and — more useful — it
+# can run the result natively to prove the bundle works before it ships.
+#
+# Output is a plain rootfs overlay: absolute paths, so the device just extracts it
+# into / inside the container.
+name: Build wine bundle for the container
+
+on:
+  workflow_dispatch:
+    inputs:
+      wine_release:
+        description: DXVK release tag (empty = latest)
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: Wine x86_64 + DXVK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install wine and a cross compiler for the self-test
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            wine64 wine mingw-w64 unzip
+          wine64 --version || wine --version
+
+      # The whole point of building this here: the runner is x86_64, so the exact
+      # binaries we are about to ship can be executed before shipping them.
+      - name: Prove wine runs a real Windows binary on this runner
+        run: |
+          set -euo pipefail
+          cat > /tmp/hello.c <<'EOF'
+          #include <stdio.h>
+          int main(void) {
+              unsigned long acc = 0;
+              for (unsigned long i = 0; i < 1000000UL; i++) acc += i ^ (acc >> 3);
+              printf("hello from a Windows PE, acc=%lu\n", acc);
+              return 0;
+          }
+          EOF
+          x86_64-w64-mingw32-gcc -O1 /tmp/hello.c -o /tmp/hello.exe
+          file /tmp/hello.exe
+          export WINEPREFIX=/tmp/wineprefix WINEDEBUG=-all
+          wine64 /tmp/hello.exe 2>&1 | tail -5
+          echo "self-test: wine executed a Windows PE"
+
+      - name: Collect the wine payload
+        run: |
+          set -euo pipefail
+          STAGE=/tmp/stage
+          mkdir -p "$STAGE"
+
+          # Frame the bundle as a rootfs overlay so extraction on the device needs
+          # no path juggling.
+          collect() {
+            while IFS= read -r f; do
+              [ -e "$f" ] || continue
+              case "$f" in
+                # 32-bit halves are dead weight: this device stack is x86_64 only.
+                */wine/i386*|*/wine/*/i386-*|*/wine/i386-windows/*|*/wine/i386-unix/*) continue ;;
+                *.a|*.la) continue ;;
+                /usr/share/doc/*|/usr/share/man/*|/usr/share/lintian/*) continue ;;
+              esac
+              mkdir -p "$STAGE$(dirname "$f")"
+              cp -a "$f" "$STAGE$f" 2>/dev/null || true
+            done
+          }
+
+          for pkg in wine64 libwine wine wine-common; do
+            dpkg -L "$pkg" 2>/dev/null | collect || true
+          done
+
+          # Anything wine's own binaries need that is not part of a base image is
+          # listed here rather than bundled: box64 wraps host libraries, so an
+          # x86_64 copy is usually the wrong answer. This list is what to revisit
+          # if the device reports a missing soname.
+          echo "--- non-base libraries wine64 links against ---"
+          ldd "$(command -v wine64)" 2>/dev/null | awk '{print $1}' | sort -u | head -30
+
+          echo "--- staged size ---"
+          du -sh "$STAGE"
+          echo "--- largest staged directories ---"
+          du -h --max-depth=3 "$STAGE/usr" 2>/dev/null | sort -hr | head -12
+
+      - name: Fetch DXVK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag='${{ inputs.wine_release }}'
+          if [ -z "$tag" ]; then
+            tag=$(curl -fsSL https://api.github.com/repos/doitsujin/dxvk/releases/latest \
+                  | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')
+          fi
+          echo "DXVK $tag"
+          url=$(curl -fsSL "https://api.github.com/repos/doitsujin/dxvk/releases/tags/$tag" \
+                | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((a["browser_download_url"] for a in d["assets"] if a["name"].endswith(".tar.gz")), ""))')
+          [ -n "$url" ] || { echo "::error::no DXVK tarball in release $tag"; exit 1; }
+          curl -fsSL --retry 3 -o /tmp/dxvk.tar.gz "$url"
+          tar -tzf /tmp/dxvk.tar.gz | head -12
+          mkdir -p /tmp/dxvk && tar -xzf /tmp/dxvk.tar.gz -C /tmp/dxvk --strip-components=1
+          ls -l /tmp/dxvk/x64/ 2>/dev/null || ls -R /tmp/dxvk | head -20
+
+      - name: Stage DXVK dlls
+        run: |
+          set -euo pipefail
+          STAGE=/tmp/stage
+          D=/tmp/stage/opt/dxvk/x64
+          mkdir -p "$D"
+          # d3d9/d3d10core/d3d11/dxgi are what the D3D path needs; nothing else.
+          for dll in d3d9.dll d3d10core.dll d3d11.dll dxgi.dll; do
+            if [ -f "/tmp/dxvk/x64/$dll" ]; then
+              cp -a "/tmp/dxvk/x64/$dll" "$D/"
+              echo "  ok   $dll"
+            else
+              echo "::error::missing /tmp/dxvk/x64/$dll"; exit 1
+            fi
+          done
+          # Confirm they are Windows DLLs, not ELF: wine loads them as PE.
+          for f in "$D"/*.dll; do
+            file -b "$f" | grep -qi 'PE32\|MS-DOS' || { echo "::error::$f is not a PE image"; exit 1; }
+          done
+          echo "DXVK dlls staged"
+
+      - name: Write a manifest and pack
+        run: |
+          set -euo pipefail
+          STAGE=/tmp/stage
+          {
+            echo "wine bundle for the x86_64-on-ARM container"
+            echo "wine: $(wine64 --version 2>/dev/null || wine --version 2>/dev/null)"
+            echo "dxvk: $(ls /tmp/stage/opt/dxvk/x64 | tr '\n' ' ')"
+            echo
+            echo "extract inside the container with:"
+            echo "  tar -xzf wine-bundle.tar.zst -C /"
+            echo
+            echo "the Windows layer is x86_64; box64 emulates it and wraps the"
+            echo "host aarch64 libvulkan, so no x86_64 Vulkan driver is needed."
+          } > "$STAGE/MANIFEST.txt"
+
+          cd "$STAGE"
+          tar --zstd -cf "$GITHUB_WORKSPACE/wine-bundle.tar.zst" .
+          cd "$GITHUB_WORKSPACE"
+          ls -lh wine-bundle.tar.zst
+          echo "size=$(stat -c%s wine-bundle.tar.zst)" >> "$GITHUB_ENV"
+          sha256sum wine-bundle.tar.zst > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Report size
+        run: |
+          echo "bundle size: $((size / 1024 / 1024)) MB"
+          if [ "$size" -gt 209715200 ]; then
+            echo "::warning::bundle exceeds 200 MB; consider trimming wine dlls"
+          fi
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: wine-bundle-x86_64
+          path: |
+            wine-bundle.tar.zst
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
