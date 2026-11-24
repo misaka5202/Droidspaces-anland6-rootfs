@@ -53,7 +53,9 @@ jobs:
           EOF
           x86_64-w64-mingw32-gcc -O1 /tmp/hello.c -o /tmp/hello.exe
           file /tmp/hello.exe
-          export WINEPREFIX=/tmp/wineprefix WINEDEBUG=-all
+          # wine refuses to create its prefix in a directory it does not own, and
+          # /tmp on a runner belongs to root, so use the runner's own temp dir.
+          export WINEPREFIX="$RUNNER_TEMP/wineprefix" WINEDEBUG=-all
           wine64 /tmp/hello.exe 2>&1 | tail -5
           echo "self-test: wine executed a Windows PE"
 
