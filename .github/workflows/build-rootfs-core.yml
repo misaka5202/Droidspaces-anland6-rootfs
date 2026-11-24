@@ -411,6 +411,17 @@ jobs:
           ANLAND_MAJOR: ${{ inputs.anland_major }}
           ANLAND6_VERSION: ${{ inputs.anland6_version }}
           ANLAND6_XWAYLAND: "0"
+          # Runners are not in China. Debian's Dockerfile pins APT_MIRROR to
+          # mirrors.aliyun.com for the shipped image, which made every CI build
+          # haul the full KDE/Qt6 tree (500+ packages) across the Pacific:
+          # Debian ran 16 minutes against Ubuntu's 10 with no mirror change.
+          # Build from the Debian CDN instead, and for zh rewrite the sources
+          # back to the China mirror before packaging (the shipped image must
+          # stay usable on mainland networks where deb.debian.org times out).
+          # en ships the CDN as-is. Only Debian has the mirror machinery today;
+          # empty values are not forwarded, so other templates are untouched.
+          APT_MIRROR: ${{ matrix.template == 'Debian-13' && 'http://deb.debian.org/debian' || '' }}
+          APT_MIRROR_FINAL: ${{ matrix.template == 'Debian-13' && inputs.ui_language == 'zh' && 'http://mirrors.aliyun.com/debian' || '' }}
         run: |
           chmod +x build_rootfs-native.sh
           ./build_rootfs-native.sh \

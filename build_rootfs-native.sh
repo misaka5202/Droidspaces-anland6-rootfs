@@ -184,8 +184,25 @@ if [ -n "${GITHUB_ACTIONS:-}" ]; then
   DSL_CACHE_FLAGS=(--cache-from type=gha --cache-to type=gha,mode=max)
 fi
 
+# APT_MIRROR is forwarded only when set: passing it empty would override the
+# Dockerfile default (an explicit empty ARG beats its default value) and
+# silently drop the mirror rewrite. CI sets it to the distro CDN because
+# runners are not in China; unset keeps the shipped aliyun default.
+# APT_MIRROR_FINAL is the two-stage partner: zh builds set it to the China
+# mirror so the shipped image rewrites back before packaging, en builds set it
+# to empty to keep the build CDN in the image. It is forwarded when *declared*
+# (set-but-empty is meaningful here), unlike APT_MIRROR.
+APT_MIRROR_FLAGS=()
+if [ -n "${APT_MIRROR:-}" ]; then
+  APT_MIRROR_FLAGS+=(--build-arg APT_MIRROR="$APT_MIRROR")
+fi
+if [ -n "${APT_MIRROR_FINAL+set}" ]; then
+  APT_MIRROR_FLAGS+=(--build-arg APT_MIRROR_FINAL="$APT_MIRROR_FINAL")
+fi
+
 docker buildx build \
   "${DSL_CACHE_FLAGS[@]}" \
+  "${APT_MIRROR_FLAGS[@]}" \
   --target export \
   --output type=tar,dest="$TEMP_TAR" \
   --build-arg DESKTOP="$DESKTOP" \

@@ -174,8 +174,22 @@ FINAL_NAME="${PREFIX}-${DESKTOP}-${DISPLAY_LABEL}-Droidspaces-rootfs-${TARGET_AR
 
 echo "正在运行 Docker Buildx ($PLATFORM 跨架构模式)..."
 
+# APT_MIRROR is forwarded only when set: passing it empty would override the
+# Dockerfile default (an explicit empty ARG beats its default value) and
+# silently drop the mirror rewrite for local builds. APT_MIRROR_FINAL is
+# forwarded when declared — en builds deliberately pass empty, and unset must
+# keep the Dockerfile default.
+APT_MIRROR_FLAGS=()
+if [ -n "${APT_MIRROR:-}" ]; then
+  APT_MIRROR_FLAGS+=(--build-arg APT_MIRROR="$APT_MIRROR")
+fi
+if [ -n "${APT_MIRROR_FINAL+set}" ]; then
+  APT_MIRROR_FLAGS+=(--build-arg APT_MIRROR_FINAL="$APT_MIRROR_FINAL")
+fi
+
 docker buildx build \
   --platform "$PLATFORM" \
+  "${APT_MIRROR_FLAGS[@]}" \
   --target export \
   --output type=tar,dest="$TEMP_TAR" \
   --build-arg DESKTOP="$DESKTOP" \

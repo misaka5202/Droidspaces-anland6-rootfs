@@ -31,7 +31,17 @@ ENV DEBIAN_FRONTEND=noninteractive
 # China connection it times out, so every apt step fails). Rewrite the URIs to a
 # mirror that is, and pass --build-arg APT_MIRROR=http://deb.debian.org/debian
 # to opt back out.
+#
+# Two-stage mirroring (zh images): APT_MIRROR decides where the BUILD downloads
+# packages from, APT_MIRROR_FINAL decides what the SHIPPED image's sources end
+# up pointing at. CI passes APT_MIRROR=deb.debian.org because runners are not in
+# China — with the old single-arg scheme every CI build hauled the full KDE/Qt6
+# tree (~500 packages) from mirrors.aliyun.com across the Pacific. en builds
+# leave APT_MIRROR_FINAL empty and ship the upstream CDN; the default rewrites
+# back to the China mirror so zh images keep the user-facing aliyun experience
+# that local builds have always produced.
 ARG APT_MIRROR=http://mirrors.aliyun.com/debian
+ARG APT_MIRROR_FINAL=http://mirrors.aliyun.com/debian
 
 RUN if [ -n "${APT_MIRROR}" ]; then \
         for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do \
@@ -481,7 +491,22 @@ RUN if [ "$ENABLE_systemd257_ARG" = "true" ]; then \
 
 # 最终清理 APT 包管理器缓存，尽可能缩减镜像层体积
 # 打包前删除仅用于构建的一次性脚本；TUI 和运行时脚本保留。
-RUN rm -f \
+#
+# 先写回国内源：构建期间用的是 APT_MIRROR（CI 传 deb.debian.org 以贴近 runner），
+# 交付给 zh 用户的镜像要指回 APT_MIRROR_FINAL（阿里云），否则国内容器内 apt 超时。
+# en 构建传 APT_MIRROR_FINAL='' 跳过写回，保持上游 CDN。local 构建两个变量都走
+# 默认值（开头写阿里云、结尾原样写回阿里云），镜像内容与旧行为一致。
+RUN if [ -n "${APT_MIRROR_FINAL:-}" ] && [ "${APT_MIRROR_FINAL}" != "${APT_MIRROR}" ]; then \
+        for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do \
+            if [ -f "$f" ]; then \
+                sed -i "s|${APT_MIRROR}|${APT_MIRROR_FINAL}|g; s|http://deb.debian.org/debian|${APT_MIRROR_FINAL}|g" "$f"; \
+            fi; \
+        done; \
+        echo "--> [zh] 交付源已写回 ${APT_MIRROR_FINAL}"; \
+    else \
+        echo "--> [en] 保持构建源 ${APT_MIRROR}"; \
+    fi && \
+    rm -f \
         /usr/local/sbin/configure-chrome \
         /usr/local/sbin/configure-desktop \
         /usr/local/sbin/install-desktop \
