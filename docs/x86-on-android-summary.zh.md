@@ -167,4 +167,14 @@ Steam depot 直下的 Factorio 2.1.24 win64 完整包（1.67GB）解压进容器
 
 停滞点归为 **box64 GL-wrapper/wine 交叉层的死锁族**（DXVK adapter gate 的同类，issue #3220 家族），修复属翻译器专项，非本镜像层能解。
 
+### 9.1 平板对照实验（决定性，同日追加）
+
+同一 Factorio.zip、同版 box64（v0.3.8 同 build）、同版 mesa（26.0.8-1ubuntu0.3）、同 Kron4ek wine、同 `--force-opengl + llvmpipe` 参数，在 pineapple 平板 Debian 容器：
+
+- **主菜单完整显示**（截图为证：logo/登录框/虫群 3D 背景/`2.1.24 (build 87808, win64)` 角标），auth TLS check 成功后进入正常菜单态。
+- 呈现次序铁律再验证：窗口 map 时屏幕必须已醒且 **Activity 在会话之前启动**——亮屏前 map 的窗口首帧丢失表现为黑屏（`xwininfo` 可见窗口存在但 screencap 全黑），重建"Activity→会话→游戏"次序即愈。
+- 平板 host GL 三种 loader 覆写（kgsl/freedreno/llvmpipe）在 glxinfo 层面 `kgsl` 路径报 `failed to retrieve device information`：**交付路径实际靠 llvmpipe**，与 MTK 一致。
+
+**归因更新**：MTK 的 "Loading 3D bitmaps" 0% 冻结是 **MTK 设备特有**问题（版本、栈组成、参数、auth 网络全部排除）。剩余嫌疑：MTK 容器 `/dev/dri`（vkms 节点探测行为）、复制式 prefix 的 DllOverrides 残留（`vulkan-1=native,builtin` 指向 ELF 伪 dll）。下一步在 MTK 用**全新 wineboot prefix** 复测即可一锤定音。
+
 **镜像级修复（本轮落地）**：`configure-gpu.sh` MTK 分支重写——glibc PanVK 在场时**不再写任何 hybris 全局变量**（`LD_LIBRARY_PATH=/opt/hy/inst/lib` 会把所有 glibc 进程的 libvulkan/libEGL 拐进 bionic linker，实测拖死 Xwayland 与 wine 的 GL 初始化），交付环境固定 `swrast+llvmpipe+LIBGL_ALWAYS_SOFTWARE=1`；GL-over-hybris 仅作 `mali-gpu.env` 手动实验入口。
