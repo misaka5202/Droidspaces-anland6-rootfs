@@ -155,13 +155,30 @@ configure_mediatek() {
     # 构建期 setup-mali-hybris.sh 会把 libhybris 装到 /opt/hy/inst，
     # 并把 gralloc shim 放到 /opt/hy/android。这里只写环境变量。
     if [ -e "${ROOTFS_DIR:-}/opt/hy/inst/lib/libEGL.so" ]; then
+        # --- 2026-11-25 MTK 实测定论（mt6989 重写本块）---
+        # glibc 构建的 PanVK（/opt/panvk）在场时，Vulkan 入口 = 系统 Khronos
+        # loader + /etc/vulkan/icd.d/panvk_g.json，box64/wine/原生程序同一路径。
+        # 此时**绝不能**把 hybris 写进全局环境：LD_LIBRARY_PATH=/opt/hy/inst/lib
+        # 让所有 glibc 进程的 libvulkan/libEGL 解析到 hybris 版，ICD dlopen 被
+        # 拐进 bionic linker（"namespace (default)" 报错），实测会拖死
+        # Xwayland 与 winevulkan。GL 硬件路径（Mali NDK blob）在 glibc 宿主
+        # 上已证伪：bionic jemalloc 在 vkCreateInstance/eglInitialize 处 TSD
+        # abort，因此交付环境固定软件 GL（llvmpipe——Factorio 实测可加载全部
+        # 16K 图集）。确需 GL-over-hybris 的实验场景自行
+        # `. /opt/hy/mali-gpu.env`，不进交付镜像。
+        if [ -e "${ROOTFS_DIR:-}/opt/panvk/libvulkan_panfrost_g.so" ]; then
+            append_env "MESA_LOADER_DRIVER_OVERRIDE=swrast"
+            append_env "GALLIUM_DRIVER=llvmpipe"
+            append_env "LIBGL_ALWAYS_SOFTWARE=1"
+            log "MTK：Vulkan = glibc PanVK（icd.d 标准入口），GL = llvmpipe"
+        else
         append_env "LD_LIBRARY_PATH=/opt/hy/inst/lib"
         append_env "HYBRIS_PATCH_TLS=1"
         append_env "HYBRIS_EGLPLATFORM=null"
         append_env "LIBEGL=/vendor/lib64/egl/libGLES_mali.so"
         append_env "LIBGLESV2=/vendor/lib64/egl/libGLES_mali.so"
         append_env "HYBRIS_LD_LIBRARY_PATH=/opt/hy/android:/vendor/lib64/egl:/vendor/lib64/hw:/vendor/lib64:/system/lib64:/system_ext/lib64:/apex/com.android.vndk.v34/lib64"
-        # 不要设 MESA_LOADER_DRIVER_OVERRIDE / LIBGL_ALWAYS_SOFTWARE：
+        # 旧版 hybris 路线（仅 NDK panvk 存在时保留）——注意：
         # 那会把 Mesa 钉在软件路径上，libhybris 就没有意义了。
         #
         # 不要设 VK_ICD_FILENAMES：Vulkan 加载器本来就会扫描
@@ -173,18 +190,15 @@ configure_mediatek() {
         # 由此拿到真 GPU；bionic 库只能经 android_dlopen 加载，所以不走
         # icd.d/ICD json，走 LIBVULKAN（与 LIBEGL/LIBGLESV2 同一套开关）。
         # 没装 panvk 时保持默认（厂商 blob 的 Android Vulkan loader）。
-        if [ -e "${ROOTFS_DIR:-}/opt/panvk/libvulkan_panfrost_g.so" ]; then
-            # glibc 原生构建（build-panvk-glibc.sh）：/etc/vulkan/icd.d/panvk_g.json
-            # 已由标准 loader 加载，box64/wine 与本机程序同一入口，无需 LIBVULKAN。
-            # 注意：/etc/environment 里残留的 HYBRIS_* 会把 dlopen 导到 bionic
-            # linker（报 namespace "(default)"），glibc 直用场景要清掉或 env -i。
-            log "MTK：Vulkan = PanVK(glibc 构建)，标准 loader 直连 /dev/mali0"
-        elif [ -e "${ROOTFS_DIR:-}/usr/local/share/panvk/panvk.env" ] \
+        # 遗留 NDK 路线（无 glibc 构建时才到这）：bionic 库只能经
+        # android_dlopen 加载，所以不走 icd.d/ICD json，走 LIBVULKAN。
+        if [ -e "${ROOTFS_DIR:-}/usr/local/share/panvk/panvk.env" ] \
            && [ -e "${ROOTFS_DIR:-}/usr/local/lib/vulkan/panvk/libvulkan_panfrost.so" ]; then
             append_env "LIBVULKAN=/usr/local/lib/vulkan/panvk/libvulkan_panfrost.so"
-            log "MTK：Vulkan = Mesa PanVK on kbase（hybris LIBVULKAN，DXVK/Zink 走真 GPU）"
+            log "MTK（遗留 hybris 路线）：Vulkan = NDK PanVK via LIBVULKAN——注意 bionic jemalloc 在 wine/Xwayland 场景会 TSD abort，勿交付"
         fi
         log "MTK：渲染路径 = libhybris + 厂商 Mali（需宿主 mali_nsfix）"
+        fi
     else
         # 回退：构建期没装成 libhybris，退回 Mesa 软件路径。
         # 实测（MTK + vkms renderD128，Wayland EGL）：

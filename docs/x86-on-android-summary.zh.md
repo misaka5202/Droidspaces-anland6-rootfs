@@ -152,3 +152,19 @@ D3D11CreateDevice   → 0x887a0004 (DXGI_ERROR_UNSUPPORTED)
 2. **触发 MTK 镜像 CI 重建**，验证 `PANVK_GLIBC_ARG` 链路并发布带 glibc PanVK 的 rootfs。
 3. **anland 6.x 上屏收尾**：MTK 装 `vkms` + `mali_nsfix.ko`，用 vkcube 窗口化验证呈现。
 4. 补齐"完整包 → 真实程序"这一步，把帧率数据做实。
+
+## 9. Factorio 实弹（2026-11-25 追加，MTK）
+
+Steam depot 直下的 Factorio 2.1.24 win64 完整包（1.67GB）解压进容器后：
+
+| 阶段 | 结果 |
+|---|---|
+| `factorio.exe --version`（box64+wine） | ✅ `2.1.24 (build 87808, win64, full)` rc=0 |
+| GUI 启动链路 | ✅ 打通：Xwayland :1 + mini-wm + waylandbridge（修好 /etc/environment 后） |
+| D3D 路径 | ❌ `vs_4_0` shader `ghost-shimmer` 撞 wined3d HLSL 翻译上限 E5017 |
+| `--force-opengl` | ✅ 越过 shader 雷，**全部图集经 llvmpipe 建成（含 16384×16384）** |
+| `Loading 3D bitmaps: 5` | ❌ 停滞：38 线程全 futex/ppoll，CPU 0%，wineserver 空闲；Xwayland 无恙（非 GL 死锁，GPU 无罪） |
+
+停滞点归为 **box64 GL-wrapper/wine 交叉层的死锁族**（DXVK adapter gate 的同类，issue #3220 家族），修复属翻译器专项，非本镜像层能解。
+
+**镜像级修复（本轮落地）**：`configure-gpu.sh` MTK 分支重写——glibc PanVK 在场时**不再写任何 hybris 全局变量**（`LD_LIBRARY_PATH=/opt/hy/inst/lib` 会把所有 glibc 进程的 libvulkan/libEGL 拐进 bionic linker，实测拖死 Xwayland 与 wine 的 GL 初始化），交付环境固定 `swrast+llvmpipe+LIBGL_ALWAYS_SOFTWARE=1`；GL-over-hybris 仅作 `mali-gpu.env` 手动实验入口。
