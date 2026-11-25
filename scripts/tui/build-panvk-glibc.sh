@@ -7,7 +7,7 @@
 #   "Error setting TSD" 并 abort —— bionic 的 TLS 假设在 glibc 进程里不成立
 #   （Qualcomm 之外的 MTK 容器实测，2026-11-25）。
 #   驱动本体（kbase_kmod.c）只用 ioctl/mmap，平台无关：glibc 原生构建即可。
-#   实测 Immortalis-G715（mt6989）/dev/mali0：标准 Khronos loader + 本脚本
+#   实测 Immortalis-G720（mt6989）/dev/mali0：标准 Khronos loader + 本脚本
 #   产物 → x86_64 wine/box64 全链 P1..P7 GPU 提交 OK。
 #
 # 用法（容器内 root，或任何 aarch64 glibc）：

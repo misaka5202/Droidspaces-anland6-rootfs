@@ -159,7 +159,7 @@ XCB failed to connect to the X server
 The rootless Xwayland started by anland-session asserts an xauth cookie that the
 container does not hold. That, not the driver, is the next thing to fix.
 
-## MTK (mt6989 / Immortalis-G715): the driver must be glibc-native
+## MTK (mt6989 / Immortalis-G720): the driver must be glibc-native
 
 2026-11-25 run on Dimensity 9300. Three walls, one door:
 

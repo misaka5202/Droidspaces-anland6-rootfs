@@ -353,7 +353,7 @@ wine-10.0 (Ubuntu 10.0~repack-12ubuntu1)
 
 ---
 
-## 12. MTK 路线复刻成功（2026-11-25，mt6989 / Immortalis-G715）
+## 12. MTK 路线复刻成功（2026-11-25，mt6989 / Immortalis-G720）
 
 高通平板的结论（box64 包 host aarch64 libvulkan）在 MTK 上撞了新的墙，最终换道打通：
 
