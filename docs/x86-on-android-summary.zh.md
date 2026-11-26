@@ -236,3 +236,26 @@ WARNING: panvk is not a conformant Vulkan implementation
 **仍未打通的环节**：zink 走 PanVK 时 `vkCreateInstance` 之前正常，但 Xwayland GLX 层报 `couldn't find RGB GLX visual`（`/etc/environment` 与 anland-session 都强制 `LIBGL_ALWAYS_SOFTWARE=1`/llvmpipe，zink 又被 `CPU device requested` 限制）。**DXVK 走 PanVK 的 D3D 直通**仍是 §报告 12.4 的 open item（`Direct3DCreate9` 返回 NULL，两平台共有）。所以 Factorio 当前仍用 softpipe + `--video-memory-usage=low` 通关，但"PanVK 在本机不可用"的结论作废。
 
 **llvmpipe 死锁结论保留**：`LP_NUM_THREADS=0`（auto，非单线程）与 `=1` 均停在 `Loading 3D bitmaps: 5`、CPU 0%、栈在 libgallium futex；这是 GL 侧问题，与 Vulkan/PanVK 无关。
+
+### 9.4 zink + PanVK 硬件路径实测：跑通但导致整机看门狗重启（2026-11-26）
+
+继续攻硬件加速，找到让 zink 选中 PanVK 的正确配方（推翻上述"GLX visual 失败不可解"）：
+
+```
+VK_ICD_FILENAMES=/etc/vulkan/icd.d/panvk_g.json
+GALLIUM_DRIVER=zink
+不设 MESA_LOADER_DRIVER_OVERRIDE（设 zink 会强制 DRI loader 导致 fbconfig 失败）
+不设 LIBGL_ALWAYS_SOFTWARE=1（否则 zink 被 CPU device requested 限制）
+→ glxinfo -B: OpenGL renderer = zink Vulkan 1.4(PanVK-G720-Immortalis MC12 (MESA_PANVK))
+→ eglinfo surfaceless: 三个 profile 全部 PanVK 硬件
+```
+
+Factorio 配置 `config/config.ini` 加 `max-texture-size=4096`（默认 0 会建 16384 图集，内存爆炸），把图集压到 4096 档，加载从 300s 降到 ~110s，`Factorio initialised` 正常达成。进程 `oom_score_adj=-1000`（box64/wine 自身设置，非脚本），不再被 lmk 杀（此前 `GAME_EXIT_CODE=137`=SIGKILL 是 lmk 干的）。
+
+**但整机两次被打死**：硬件路径满载运行时，`adb` 卡死→offline，等 1-2 分钟恢复后发现 **`up 0 min`——看门狗强制重启**（uptime 归零，容器需手动 `droidspaces -n Ubuntu start`）。这是 mali-panvk 非一致性驱动（`WARNING: panvk is not a conformant Vulkan implementation`）在持续渲染负载下的内核态死锁/过热，容器层无解。
+
+**结论（最终）**：
+- PanVK **芯片识别/探针级可用**（§9.3 铁证），但**持续游戏负载会让整机重启**，不可作为日常方案。
+- Factorio 回退 softpipe + `--video-memory-usage=low`（稳定、慢但可用）；`config.ini` 已备份还原（`config.ini.bak-hw`）。
+- zink+PanVK 配方保留作"短时 Vulkan 验证"用途，**严禁长时间运行游戏**。
+- `--force-vulkan` 参数在 Factorio 2.1 不存在（只有 `--force-opengl`），原生 Vulkan 渲染器路线作废。
