@@ -259,3 +259,20 @@ Factorio 配置 `config/config.ini` 加 `max-texture-size=4096`（默认 0 会�
 - Factorio 回退 softpipe + `--video-memory-usage=low`（稳定、慢但可用）；`config.ini` 已备份还原（`config.ini.bak-hw`）。
 - zink+PanVK 配方保留作"短时 Vulkan 验证"用途，**严禁长时间运行游戏**。
 - `--force-vulkan` 参数在 Factorio 2.1 不存在（只有 `--force-opengl`），原生 Vulkan 渲染器路线作废。
+
+### 9.5 容器内 Chrome 打不开：Wayland 环境变量缺失（2026-11-26）
+
+**现象**：设备看门狗重启后，容器里 `google-chrome` 打不开，报
+`Failed to connect to Wayland display: 没有那个文件或目录 (2)` → `Failed to initialize Wayland platform` → 退出。
+
+**根因**：`/usr/local/bin/google-chrome` wrapper 用了 `--ozone-platform=wayland`，但：
+- anland 的 Wayland socket 实际在 **`/run/anland/wayland-0`**，不在系统默认的 `/run/user/1000/`；
+- 终端启动时 `XDG_RUNTIME_DIR=/run/user/1000`（错误）、`WAYLAND_DISPLAY` 为空。
+Chrome 去错误路径找 socket 失败。
+
+**修复**（`scripts/configure-chrome.sh` 的 wrapper 生成逻辑）：无条件 export
+```
+XDG_RUNTIME_DIR=/run/anland
+WAYLAND_DISPLAY=wayland-0
+```
+注意用**无条件赋值**，不能用 `${VAR:=default}`——变量已被设成错误值时默认值不生效。实测修复后直接 `google-chrome about:blank` 无需任何前缀即出画面（首次启动显示服务条款页），`ERR=0`。从 anland 应用菜单启动时会话已注入正确变量，此修复主要覆盖终端/脚本启动场景。
