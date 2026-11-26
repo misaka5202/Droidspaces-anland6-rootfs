@@ -178,3 +178,34 @@ Steam depot 直下的 Factorio 2.1.24 win64 完整包（1.67GB）解压进容器
 **归因更新**：MTK 的 "Loading 3D bitmaps" 0% 冻结是 **MTK 设备特有**问题（版本、栈组成、参数、auth 网络全部排除）。剩余嫌疑：MTK 容器 `/dev/dri`（vkms 节点探测行为）、复制式 prefix 的 DllOverrides 残留（`vulkan-1=native,builtin` 指向 ELF 伪 dll）。下一步在 MTK 用**全新 wineboot prefix** 复测即可一锤定音。
 
 **镜像级修复（本轮落地）**：`configure-gpu.sh` MTK 分支重写——glibc PanVK 在场时**不再写任何 hybris 全局变量**（`LD_LIBRARY_PATH=/opt/hy/inst/lib` 会把所有 glibc 进程的 libvulkan/libEGL 拐进 bionic linker，实测拖死 Xwayland 与 wine 的 GL 初始化），交付环境固定 `swrast+llvmpipe+LIBGL_ALWAYS_SOFTWARE=1`；GL-over-hybris 仅作 `mali-gpu.env` 手动实验入口。
+
+### 9.2 MTK 通关：根因是 llvmpipe 死锁 + 显存误报（2026-11-26 追加，推翻 9.1 的剩余嫌疑）
+
+**MTK 已进 Factorio 主菜单**（加载画面、logo、精灵进度条截图为证）。§9.1 遗留的"prefix 残留 / box64 死锁族"归因不成立：全新 prefix 与完整 prefix 在同一位置冻结，wine/box64/mesa/游戏数据均字节一致（12456 文件 diff=0，icon PNG md5 相同，wine dll md5 相同）。
+
+真正的两个独立因素：
+
+| 因素 | 证据 | 处置 |
+|---|---|---|
+| **llvmpipe 在 MTK 上死锁** | `Loading 3D bitmaps: 5` 时主线程 CPU 0%，gdb 栈 `#0 syscall → libgallium-26.0.8` futex；`LP_NUM_THREADS=0`、移除 DXVK 均无效 | 换 `GALLIUM_DRIVER=softpipe`（softpipe 一次越过 3D bitmaps） |
+| **DXVK 显存误报** | MTK 报 `Dedicated video memory size 4294726927 MB`（0xFFFFFFFF 按无符号解释），Factorio 按最高档建 `16384×16384` 等巨型图集；平板报 `0 MB` → `4096` 档 | 加 `--video-memory-usage=low`，图集降到 4096/虚拟图集档 |
+
+**最终可复现启动参数**（容器 `/home/Gold/runfio_final.sh`）：
+
+```bash
+export DISPLAY=:0
+export WINEPREFIX=/home/Gold/wp          # 必须用注册表完整的 prefix
+export WINEDLLOVERRIDES="mscoree,msxml6=d"
+export WINEESYNC=1
+export LIBGL_ALWAYS_SOFTWARE=1
+export GALLIUM_DRIVER=softpipe            # 关键：llvmpipe 在 MTK 死锁
+export MESA_LOADER_DRIVER_OVERRIDE=swrast
+export LP_NUM_THREADS=0
+box64 /opt/wine-k/bin/wine64 /games/factorio/bin/x64/factorio.exe \
+  --force-opengl --video-memory-usage=low
+```
+
+顺带澄清两个误导性支线：
+
+- **GDI+/WIC PNG 解码失败**（`Failed to load sprite … InvalidParameter (2)`，`GdipLoadImageFromStream` 返回 NULL）只发生在**手工新建的 `wp2`**：wineboot 底层调用 32 位 `/opt/wine-k/bin/wine`（`Exec format error`）中途失败，注册表只写一半——PNG 解码器 CLSID `1b7cfaf4…` 条目 0 条、`InprocServer32` 595 个；完整 prefix 为 14 条 / 1190 个。用完整 prefix 即消失，与设备无关。
+- **容器重启后 anland-session 陷入 auto-restart**：`Xwayland` 与 `mini-wm` 任一退出即拖垮整个会话（日志 `Xwayland or mini-wm exited (rc=1)`），systemd `Restart=on-failure` 每 5s 重拉，窗口映射时机与 Activity 错配导致黑帧。绕开办法：停掉用户服务后以 Gold 手动常驻启动（`nohup … anland-session`），确认 PID 稳定 20s 再启动游戏；呈现次序仍是 **亮屏 → Activity → 会话 → 窗口 map**。
