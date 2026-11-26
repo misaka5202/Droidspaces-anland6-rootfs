@@ -263,15 +263,20 @@ Factorio 配置 `config/config.ini` 加 `max-texture-size=4096`（默认 0 会�
 
 **根因**：镜像内置的是 `mali-panvk v1.6.0 / 27.0.0-devel-r10`（≈案例的 RC3 老版）。Factorio 精灵加载时突发大批量 copy boxes（我们日志里 `<convert: 558ms, 1272ms>` 即佐证）在老版 kbase 上触发 tiler heap OOM；G615/G720 + CSF 下若未优雅恢复，直接拖死 GPU 看门狗→整机复位。**是驱动版本 bug + 提交速率失控，不是 `GALLIUM_DRIVER=zink` / `max-texture-size` 等启动参数配错**。
 
-**解决方向（未在本机实施，留档）**：
-1. 换新版驱动 `panvk-kbase v26.3.1` 的 glibc `.so`（zenithblue-oss/panvk-kbase-android release），替换 `/opt/panvk/libvulkan_panfrost_g.so` 并更新 `panvk_g.json`；
-2. 加 `DRIRC_CONFIGURATION=pan_enable_vertex_pipeline_stores_atomics=false`；
-3. 限帧（案例 B 证实可缓解整机重启），Factorio 侧 `config.ini` 未找到现成 fps cap 项，需外部手段（如 `fps_max` / vsync 或驱动层）。
+**解决（已在本机实施并端到端实测成功，2026-11-27）**：
+1. 换 `panvk-kbase v26.3.1` glibc 预编译 `.so`（`libvulkan_panfrost-glibc-aarch64.so`，33.9 MB，SHA256 `063bcf0c…f5d0db6`），替换 `/opt/panvk/libvulkan_panfrost_g.so`；
+   - 该库 NEEDED `libSPIRV-Tools.so`，发行版只提供静态 `.a`，用最小 no-op stub（`gcc -shared`）满足动态链接即可（SPIRV-Tools 仅 debug 反汇编用，正常渲染不调用）。
+   - `build-panvk-glibc.sh` 已改为默认 `PANVK_PREBUILT=prefer` 下载该产物（1.7s，不再走 13 min 老源码编译），SHA256 校验 + stub + hybris ICD 封存 + drirc 一体化；`PANVK_PREBUILT=source` 可回退旧源码编译。
+2. `configure-gpu.sh` 加 `DRIRC_CONFIGURATION=pan_enable_vertex_pipeline_stores_atomics=false`（案例证实的读档冻结修复）。
+3. 设备侧新驱动 probe6：`iface=5`、实例/设备/队列 rc=0、`deviceName=Mali-G720-Immortalis MC12`（区别于老版 `PanVK-G720…`）。
+4. **端到端实测**：zink+PanVK + v26.3.1 加载 Factorio，`> 100 copy boxes` 警告照常出现（旧版正是死在这里），但**无 tiler heap OOM / DEVICE LOST / 整机重启**；`Factorio initialised` 148s 达成，进程持续存活，load 峰值 97 后回落到 34，设备 up 连续未断。**新驱动彻底解决卡死**。
 
-**当前状态（最终）**：
-- Factorio 回退 softpipe + `--video-memory-usage=low`（稳定、慢但可用）；`config.ini` 已备份还原（`config.ini.bak-hw`）。
-- zink+PanVK 配方保留作"短时 Vulkan 验证"用途，**严禁长时间运行旧驱动游戏**。
+**CI 镜像重建**：`workflow_dispatch` run `45862681170`（commit `224b4a5`），`gpu_vendor=mediatek`/`language=zh`/`publish_release=false`（只出 artifact，不发 Release），20 个发行版×桌面变体全部构建成功。构建日志确认 `下载 panvk-kbase v26.3.1 预编译 glibc 驱动 → done (prebuilt v26.3.1)`，源码编译路径未触发。
+
+**遗留**：
+- 限帧（案例 B 证实可进一步缓解提交风暴）：Factorio `config.ini` 无现成 fps cap 项；当前未限帧但设备未重启，属可接受状态。
 - `--force-vulkan` 参数在 Factorio 2.1 不存在（只有 `--force-opengl`），原生 Vulkan 渲染器路线作废。
+- artifact 下载在本机网络下多次 `unexpected EOF`，未能拉到本地镜像文件；但驱动部署已由 CI 日志 + 设备实测双重验证，不影响结论。
 
 ### 9.5 容器内 Chrome 打不开：Wayland 环境变量缺失（2026-11-26）
 
