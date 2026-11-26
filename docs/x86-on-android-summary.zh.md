@@ -219,3 +219,9 @@ box64 /opt/wine-k/bin/wine64 /games/factorio/bin/x64/factorio.exe \
 3. **llvmpipe 在该 MTK 上无条件死锁**：`LP_NUM_THREADS=0`（auto）与 `=1` 均停在 `Loading 3D bitmaps: 5`、CPU 0%、栈在 libgallium futex；与 DXVK 是否存在无关。注意 `LP_NUM_THREADS=0` 是自动全核而非单线程，此前理解有误。
 
 **结论**：`GALLIUM_DRIVER=softpipe` + `--video-memory-usage=low` 仍是目前唯一通关组合。加载条停在 50% 的 `Parallel sprite loader` 阶段是 softpipe 单线程软件光栅化 + BCn 纹理压缩在 CPU 上跑，进程 100% CPU、RSS 2.4GB，属缓慢而非死锁（平板 44s 完成，MTK 需数分钟）。要硬件加速需内核提供 panfrost DRM 或更换支持 Mali kbase 的 Vulkan 实现，容器层无解。
+
+**为何 `mali_nsfix` / `vkms` 帮不上**（应要求核查 LKM 模块）：
+
+- `mali_nsfix-android14-6.1.ko` 的模块描述为 `Redirect find_get_pid() calls made by the Mali kbase driver so GPU contexts work inside a PID namespace`——它 kprobe `find_get_pid()`（`nshf_hits=94`、`nshf_active=1`、`nshf_driver=mali_kbase_mt6989_r44`），解决的是**容器内 PID namespace 下开 Mali GPU context**，与 DRM 设备节点暴露无关，且它本就在正常工作。
+- 同目录的 `vkms-android14-6.1.ko` 是 Virtual KMS（软件 KMS，带 `DRM_RENDER_ALLOW`），即便加载也只注册软件 card/render 节点，不会把 Mali 硬件交给 PanVK；宿主 `mediatek_drm` 已占用 card0。
+- vendor Mali Vulkan（`/vendor/lib64/hw/mt6989/vulkan.mali.so`）只走 `/dev/mali0` kbase ioctl，二进制内无 `/dev/dri`/`drmOpen` 字样；走标准 Vulkan loader 时 libhybris ICD（`libvulkan.so.1.2.183`）因 `loader interface version 0`（loader 1.4.341 要求 ≥5）被拒，直接 dlopen 该库则挂起。容器里的 `vulkaninfo`/`vkcube` 全是 x86-64 二进制，前期测试受 `Exec format error` 干扰，改用 python ctypes 直连后结论一致。
