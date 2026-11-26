@@ -252,12 +252,25 @@ GALLIUM_DRIVER=zink
 
 Factorio 配置 `config/config.ini` 加 `max-texture-size=4096`（默认 0 会建 16384 图集，内存爆炸），把图集压到 4096 档，加载从 300s 降到 ~110s，`Factorio initialised` 正常达成。进程 `oom_score_adj=-1000`（box64/wine 自身设置，非脚本），不再被 lmk 杀（此前 `GAME_EXIT_CODE=137`=SIGKILL 是 lmk 干的）。
 
-**但整机两次被打死**：硬件路径满载运行时，`adb` 卡死→offline，等 1-2 分钟恢复后发现 **`up 0 min`——看门狗强制重启**（uptime 归零，容器需手动 `droidspaces -n Ubuntu start`）。这是 mali-panvk 非一致性驱动（`WARNING: panvk is not a conformant Vulkan implementation`）在持续渲染负载下的内核态死锁/过热，容器层无解。
+**但整机两次被打死**：硬件路径满载运行时，`adb` 卡死→offline，等 1-2 分钟恢复后发现 **`up 0 min`——看门狗强制重启**（uptime 归零，容器需手动 `droidspaces -n Ubuntu start`）。pstore / `/proc/last_kmsg` 均无记录（看门狗直接复位，未走 panic 路径）。
 
-**结论（最终）**：
-- PanVK **芯片识别/探针级可用**（§9.3 铁证），但**持续游戏负载会让整机重启**，不可作为日常方案。
+#### 9.4.1 细究根因：是驱动版本 bug，不是启动参数问题（对照同构案例，2026-11-27）
+
+按 systematic-debugging 对照上游案例后，推翻"非一致性驱动笼统死锁/容器层无解"的初判：
+
+- **同构案例 A**（[pocket-foundry#10](https://github.com/JulioFerrero/pocket-foundry/issues/10)）：Poco X6 Pro / Mali-G615（同为 CSF）+ Factorio 2.1.23 + Zink on PanVK，卡在 50%「Loading sprites」。日志链路与我们逐字一致：`PERF WARNING! > 100 copy boxes` → `kbase: CSF group 0 tiler heap OOM notification` → `timeout on subqueue` → `zink: DEVICE LOST!`。作者实测 `PANVK_KBASE_HEAP_CHUNKS=400,400`、renew interval、降画质 **全部无效**——**排除参数问题**。最终靠**换驱动版本**解决：panvk-kbase v26.3.1 加载稳定，再加 `DRIRC_CONFIGURATION=pan_enable_vertex_pipeline_stores_atomics=false` 解决读档冻结，最终稳定 60 FPS。
+- **同构案例 B**（[JimVulkan/mali-panvk#13](https://github.com/JimVulkan/mali-panvk/issues/13)）：Mali G615 MC6 **整机 freeze + reboot**，与我们完全一致。作者确认是"作业提交过快无节制"（`vkWaitForFences` 处），并明确 **"Limiting fps seems to solve reboot/crash/freeze"**；维护者认同并推送修复。
+
+**根因**：镜像内置的是 `mali-panvk v1.6.0 / 27.0.0-devel-r10`（≈案例的 RC3 老版）。Factorio 精灵加载时突发大批量 copy boxes（我们日志里 `<convert: 558ms, 1272ms>` 即佐证）在老版 kbase 上触发 tiler heap OOM；G615/G720 + CSF 下若未优雅恢复，直接拖死 GPU 看门狗→整机复位。**是驱动版本 bug + 提交速率失控，不是 `GALLIUM_DRIVER=zink` / `max-texture-size` 等启动参数配错**。
+
+**解决方向（未在本机实施，留档）**：
+1. 换新版驱动 `panvk-kbase v26.3.1` 的 glibc `.so`（zenithblue-oss/panvk-kbase-android release），替换 `/opt/panvk/libvulkan_panfrost_g.so` 并更新 `panvk_g.json`；
+2. 加 `DRIRC_CONFIGURATION=pan_enable_vertex_pipeline_stores_atomics=false`；
+3. 限帧（案例 B 证实可缓解整机重启），Factorio 侧 `config.ini` 未找到现成 fps cap 项，需外部手段（如 `fps_max` / vsync 或驱动层）。
+
+**当前状态（最终）**：
 - Factorio 回退 softpipe + `--video-memory-usage=low`（稳定、慢但可用）；`config.ini` 已备份还原（`config.ini.bak-hw`）。
-- zink+PanVK 配方保留作"短时 Vulkan 验证"用途，**严禁长时间运行游戏**。
+- zink+PanVK 配方保留作"短时 Vulkan 验证"用途，**严禁长时间运行旧驱动游戏**。
 - `--force-vulkan` 参数在 Factorio 2.1 不存在（只有 `--force-opengl`），原生 Vulkan 渲染器路线作废。
 
 ### 9.5 容器内 Chrome 打不开：Wayland 环境变量缺失（2026-11-26）
