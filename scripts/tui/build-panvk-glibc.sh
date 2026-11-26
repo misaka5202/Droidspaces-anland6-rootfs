@@ -15,8 +15,81 @@
 # 环境变量：
 #   PANVK_REF  源分支/tag（默认 main）
 #   PANVK_ZIP  源码 zip 本地路径（默认从 GitHub codeload 下载）
+#   PANVK_PREBUILT  预编译 glibc 驱动策略：prefer（默认，下载 v26.3.1 修复版）/ source（强制源码编译旧版）
 #   产物：/opt/panvk/libvulkan_panfrost_g.so + /etc/vulkan/icd.d/panvk_g.json
+#
+# 2026-11-27：JimVulkan/mali-panvk main（≈RC3）在 Factorio 精灵加载的大批量
+# copy boxes 突发提交下触发 kbase CSF tiler heap OOM → DEVICE LOST / 整机看门狗
+# 重启（对照 pocket-foundry#10、mali-panvk#13）。zenithblue-oss/panvk-kbase
+# v26.3.1 预编译 glibc 库修复此问题，故默认优先下载该产物，源码编译仅作回退。
 set -euo pipefail
+
+# --- 首选路径：下载 panvk-kbase v26.3.1 预编译 glibc 驱动 ------------------------------
+install_prebuilt() {
+  local tag="panvk-kbase-v26.3.1"
+  local base="https://github.com/zenithblue-oss/panvk-kbase-android/releases/download/$tag"
+  local sha="063bcf0cacd6605458f01530e7fc4f4de43cda7d7a995d9518e1a6e38f5d0db6"
+  local tmp
+  tmp="$(mktemp -d)"
+  local so="$tmp/libvulkan_panfrost-glibc-aarch64.so"
+  echo "==> 下载 panvk-kbase v26.3.1 预编译 glibc 驱动"
+  if ! curl -fsSL --retry 3 --connect-timeout 30 --max-time 600 -o "$so" "$base/libvulkan_panfrost-glibc-aarch64.so"; then
+    rm -rf "$tmp"; return 1
+  fi
+  echo "$sha  $so" | sha256sum -c - >/dev/null 2>&1 || {
+    echo "  [!!] SHA256 校验失败，回退源码编译"; rm -rf "$tmp"; return 1;
+  }
+  # 驱动 NEEDED libSPIRV-Tools.so（仅用于 debug 反汇编打印），发行版只提供静态 .a，
+  # 用最小 no-op stub 满足动态链接（案例证实移除真正 SPIRV-Tools 依赖仍可渲染）。
+  if ! ldconfig -p 2>/dev/null | grep -q 'libSPIRV-Tools.so '; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gcc libc6-dev >/dev/null 2>&1 || true
+    cat > "$tmp/spvstub.c" <<'STUBC'
+typedef void* spv_context; typedef void* spv_diagnostic; typedef void* spv_text;
+typedef unsigned int spv_result_t;
+spv_context spvContextCreate(int e){(void)e;return 0;}
+void spvContextDestroy(spv_context c){(void)c;}
+spv_result_t spvBinaryToText(spv_context c,const unsigned int*b,unsigned long n,int o,spv_text*t,spv_diagnostic*d){(void)c;(void)b;(void)n;(void)o;if(t)*t=0;if(d)*d=0;return 0;}
+void spvTextDestroy(spv_text t){(void)t;}
+void spvDiagnosticDestroy(spv_diagnostic d){(void)d;}
+spv_diagnostic spvDiagnosticCreate(const spv_text t,const char*m){(void)t;(void)m;return 0;}
+void spvDiagnosticPrint(spv_diagnostic d){(void)d;}
+STUBC
+    gcc -shared -fPIC -o /usr/lib/aarch64-linux-gnu/libSPIRV-Tools.so "$tmp/spvstub.c" 2>/dev/null \
+      && ldconfig || { echo "  [!!] SPIRV stub 构建失败，回退源码编译"; rm -rf "$tmp"; return 1; }
+  fi
+  mkdir -p /opt/panvk /etc/vulkan/icd.d
+  install -D -m 0644 "$so" /opt/panvk/libvulkan_panfrost_g.so
+  cat > /etc/vulkan/icd.d/panvk_g.json <<JSON
+{
+  "file_format_version": "1.0.1",
+  "ICD": {
+    "library_path": "/opt/panvk/libvulkan_panfrost_g.so",
+    "api_version": "1.4"
+  }
+}
+JSON
+  # 与源码路径一致的清理：封存 bionic/NDK 旧 ICD 与 hybris loader，
+  # 否则其 LD_LIBRARY_PATH 会把 glibc loader 的 ICD dlopen 拐进 bionic linker。
+  [ -e /usr/share/vulkan/icd.d/panvk.json ] && mv /usr/share/vulkan/icd.d/panvk.json /usr/share/vulkan/icd.d/panvk.json.off 2>/dev/null || true
+  [ -e /etc/vulkan/icd.d/panvk.json ]      && mv /etc/vulkan/icd.d/panvk.json /etc/vulkan/icd.d/panvk.json.off 2>/dev/null || true
+  if [ -d /opt/hy/inst/lib ]; then
+    for f in /opt/hy/inst/lib/libvulkan.so.1*; do
+      [ -e "$f" ] && mv -f "$f" "$f.hybris-off" 2>/dev/null || true
+    done
+  fi
+  # 上游案例：Mali 驱动读档冻结需关闭 vertex pipeline stores atomics。
+  mkdir -p /etc/profile.d
+  printf 'export DRIRC_CONFIGURATION=pan_enable_vertex_pipeline_stores_atomics=false\n' \
+    > /etc/profile.d/panvk-drirc.sh
+  rm -rf "$tmp"
+  echo "== done (prebuilt v26.3.1): /opt/panvk/libvulkan_panfrost_g.so =="
+  return 0
+}
+
+if [ "${PANVK_PREBUILT:-prefer}" = "prefer" ]; then
+  if install_prebuilt; then exit 0; fi
+  echo "  [!!] 预编译路径失败，回退源码编译（旧版，可能有 tiler OOM 风险）"
+fi
 
 REF="${PANVK_REF:-main}"
 SRC="${1:-/opt/mali-panvk-src}"

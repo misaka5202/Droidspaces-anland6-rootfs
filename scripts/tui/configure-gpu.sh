@@ -170,6 +170,9 @@ configure_mediatek() {
             append_env "MESA_LOADER_DRIVER_OVERRIDE=swrast"
             append_env "GALLIUM_DRIVER=llvmpipe"
             append_env "LIBGL_ALWAYS_SOFTWARE=1"
+            # 上游案例（pocket-foundry#10）：新驱动读档冻结需关闭该 drirc 选项。
+            # 软件 GL 路径下无害，切 zink+PanVK 硬件路径时必需。
+            append_env "DRIRC_CONFIGURATION=pan_enable_vertex_pipeline_stores_atomics=false"
             log "MTK：Vulkan = glibc PanVK（icd.d 标准入口），GL = llvmpipe"
         else
         append_env "LD_LIBRARY_PATH=/opt/hy/inst/lib"
