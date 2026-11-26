@@ -134,9 +134,17 @@ install -d -m 0755 "$wrapper_dir"
 #   --no-sandbox              Droidspaces 容器 allow_sandboxing=0，进程拿不到
 #                             CAP_SYS_ADMIN，setuid/namespace 沙箱 unshare 失败，
 #                             zygote 以 exit 82 FATAL。关掉沙箱才能起。
+# XDG_RUNTIME_DIR / WAYLAND_DISPLAY：anland 的 Wayland socket 在 /run/anland/wayland-0，
+# 而系统默认 XDG_RUNTIME_DIR=/run/user/1000 下没有该 socket；终端启动时缺这两个变量
+# 会让 Ozone-Wayland 报 "Failed to connect to Wayland display" 后直接退出。必须无条件
+# 覆盖（不能用 ${VAR:=default}，因为变量已被设成错误值），见仓库文档 x86 总结 §9.5。
 cat > "$wrapper" <<'EOF'
 #!/bin/sh
 set -eu
+
+XDG_RUNTIME_DIR=/run/anland
+WAYLAND_DISPLAY=wayland-0
+export XDG_RUNTIME_DIR WAYLAND_DISPLAY
 
 exec /opt/google/chrome/google-chrome \
     --ozone-platform=wayland \
