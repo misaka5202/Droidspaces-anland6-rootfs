@@ -209,3 +209,13 @@ box64 /opt/wine-k/bin/wine64 /games/factorio/bin/x64/factorio.exe \
 
 - **GDI+/WIC PNG 解码失败**（`Failed to load sprite … InvalidParameter (2)`，`GdipLoadImageFromStream` 返回 NULL）只发生在**手工新建的 `wp2`**：wineboot 底层调用 32 位 `/opt/wine-k/bin/wine`（`Exec format error`）中途失败，注册表只写一半——PNG 解码器 CLSID `1b7cfaf4…` 条目 0 条、`InprocServer32` 595 个；完整 prefix 为 14 条 / 1190 个。用完整 prefix 即消失，与设备无关。
 - **容器重启后 anland-session 陷入 auto-restart**：`Xwayland` 与 `mini-wm` 任一退出即拖垮整个会话（日志 `Xwayland or mini-wm exited (rc=1)`），systemd `Restart=on-failure` 每 5s 重拉，窗口映射时机与 Activity 错配导致黑帧。绕开办法：停掉用户服务后以 Gold 手动常驻启动（`nohup … anland-session`），确认 PID 稳定 20s 再启动游戏；呈现次序仍是 **亮屏 → Activity → 会话 → 窗口 map**。
+
+### 9.3 为何不能用 PanVK / GPU 加速（三层排除，2026-11-26）
+
+用户期望用 PanVK 跑 Mali-G720 硬件加速，逐层验证后确认此设备上**无可用硬件 GL/Vulkan 路径**，属内核/驱动层限制而非容器配置：
+
+1. **PanVK（Mesa）缺内核侧 panfrost DRM**：容器里有 glibc 版 `libvulkan_panfrost.so`（`/usr/lib/aarch64-linux-gnu/`，可正常链接 glibc），`panfrost_icd.json` 注册也正确；但宿主 `lsmod` 只有 vendor `mali_kbase_mt6989_r44` + `/dev/mali0`，**没有 panfrost.ko / renderD 节点**。zink 走该 ICD 报 `Failed to detect any valid GPUs`（`vkEnumeratePhysicalDevices` 失败）。手工 mknod 的 `card0/renderD128` 指向 mediatek_drm 显示驱动（226,0），不是 GPU，无效。
+2. **Android vendor Vulkan 经 libhybris 会挂死**：宿主有 `/vendor/lib64/hw/vulkan.mali.so`，容器有 `/opt/hy/inst/lib/libvulkan.so.1.2.183` 桥（配 `HYBRIS_LD_LIBRARY_PATH`）。但 Vulkan loader 1.4.341 拒绝其旧接口（`loader interface version 0`，要求 ≥5），`glxinfo -B` 实测超时（`RC=124`），与既有"`LD_LIBRARY_PATH=/opt/hy/inst/lib` 拖死 Xwayland/wine"记录一致。
+3. **llvmpipe 在该 MTK 上无条件死锁**：`LP_NUM_THREADS=0`（auto）与 `=1` 均停在 `Loading 3D bitmaps: 5`、CPU 0%、栈在 libgallium futex；与 DXVK 是否存在无关。注意 `LP_NUM_THREADS=0` 是自动全核而非单线程，此前理解有误。
+
+**结论**：`GALLIUM_DRIVER=softpipe` + `--video-memory-usage=low` 仍是目前唯一通关组合。加载条停在 50% 的 `Parallel sprite loader` 阶段是 softpipe 单线程软件光栅化 + BCn 纹理压缩在 CPU 上跑，进程 100% CPU、RSS 2.4GB，属缓慢而非死锁（平板 44s 完成，MTK 需数分钟）。要硬件加速需内核提供 panfrost DRM 或更换支持 Mali kbase 的 Vulkan 实现，容器层无解。
