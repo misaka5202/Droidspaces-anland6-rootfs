@@ -278,6 +278,33 @@ Factorio 配置 `config/config.ini` 加 `max-texture-size=4096`（默认 0 会�
 - `--force-vulkan` 参数在 Factorio 2.1 不存在（只有 `--force-opengl`），原生 Vulkan 渲染器路线作废。
 - artifact 下载在本机网络下多次 `unexpected EOF`，未能拉到本地镜像文件；但驱动部署已由 CI 日志 + 设备实测双重验证，不影响结论。
 
+#### 9.4.2 panic 日志实证：真正卡死根因是内存耗尽 + swap thrashing（2026-11-27）
+
+应要求细读 panic/hang 转储，修正上述"驱动 bug 是唯一根因"的判断。`pstore`/`last_kmsg` 均空（MTK 看门狗直接硬件复位，不写 pstore），但 OPLUS AEE 保留了完整 hang 转储：
+
+```
+/data/aee_exp/pre_hang/SYS_MEMORY_INFO：
+  MemTotal 15694544 kB / MemAvailable 仅 139568 kB（136 MB）/ SwapFree 11564176 kB（swap 已用 9GB）
+/data/aee_exp/pre_hang/HANG_ANDROID_LOG（lmk 记录）：
+  lowmemorykiller: Kill 'com.oplus.onetrace' ... reason: critical pressure and device is low on memory
+  lowmemorykiller: Kill 'com.mi.health:device' ... reason: min watermark is breached and thrashing (1172%)
+  ActivityManager: Killing ... (adj -10000): start timeout     ← 连系统进程都被杀，AMS 卡住
+/data/aee_exp/pre_hang/SYS_CPU_INFO：
+  PID 447 factorio.exe  VIRT 15G  RSS 10G  17.1% CPU  R 状态   ← 单进程吃掉 10GB RSS
+  多个 winedevice.exe   VIRT 5.8G ×8                        ← 反复重启残留的 wine 进程堆积
+dmesg: wdt_dump_cntcv（全 8 核 WDT 计数器转储）→ 硬件看门狗复位
+```
+
+**完整因果链**：zink+PanVK 持续渲染 → `factorio.exe` RSS 膨胀到 **10GB**（+ 残留 wine 进程）→ 15GB 物理内存耗尽、swap 用掉 9GB → **`thrashing 1172%`** → lmk 连 adj -10000 系统进程都杀、AMS `start timeout` → 整机无响应 → 看门狗复位。
+
+**修正**：案例里的 tiler heap OOM → DEVICE LOST 是 G615（11GB）上的表现路径；本机 G720（15GB + 20GB swap）上，**驱动升级避免了 DEVICE LOST，但没避免内存爆炸**——内存才是本机卡死的直接原因。`GAME_EXIT_CODE=137`（SIGKILL）正是 lmk 杀游戏进程。
+
+**防卡死要点（比驱动版本更关键）**：
+1. 每次启动前**彻底清理残留 wine 进程**（`winedevice.exe` 堆积是放大器）；
+2. `max-texture-size=4096` + `--video-memory-usage=low`（已做）；
+3. 限帧减少 zink 转换缓冲堆积——仍是未解项。
+4. 定位 factorio.exe RSS 10GB 的构成（zink 转换缓冲 / 32768×24576 虚拟图集 / box64 JIT 内存映射）是下一步方向。
+
 ### 9.5 容器内 Chrome 打不开：Wayland 环境变量缺失（2026-11-26）
 
 **现象**：设备看门狗重启后，容器里 `google-chrome` 打不开，报
