@@ -210,18 +210,29 @@ box64 /opt/wine-k/bin/wine64 /games/factorio/bin/x64/factorio.exe \
 - **GDI+/WIC PNG 解码失败**（`Failed to load sprite … InvalidParameter (2)`，`GdipLoadImageFromStream` 返回 NULL）只发生在**手工新建的 `wp2`**：wineboot 底层调用 32 位 `/opt/wine-k/bin/wine`（`Exec format error`）中途失败，注册表只写一半——PNG 解码器 CLSID `1b7cfaf4…` 条目 0 条、`InprocServer32` 595 个；完整 prefix 为 14 条 / 1190 个。用完整 prefix 即消失，与设备无关。
 - **容器重启后 anland-session 陷入 auto-restart**：`Xwayland` 与 `mini-wm` 任一退出即拖垮整个会话（日志 `Xwayland or mini-wm exited (rc=1)`），systemd `Restart=on-failure` 每 5s 重拉，窗口映射时机与 Activity 错配导致黑帧。绕开办法：停掉用户服务后以 Gold 手动常驻启动（`nohup … anland-session`），确认 PID 稳定 20s 再启动游戏；呈现次序仍是 **亮屏 → Activity → 会话 → 窗口 map**。
 
-### 9.3 为何不能用 PanVK / GPU 加速（三层排除，2026-11-26）
+### 9.3 PanVK 成功案例复核（2026-11-26，修正此前误判）
 
-用户期望用 PanVK 跑 Mali-G720 硬件加速，逐层验证后确认此设备上**无可用硬件 GL/Vulkan 路径**，属内核/驱动层限制而非容器配置：
+曾误判"缺 panfrost DRM 所以 PanVK 用不了"，查文档后确认**完全错误**：镜像里的 mali-panvk 是 Mesa PanVK 对手机 **kbase（`/dev/mali0`）** 的移植（`scripts/tui/install-panvk.sh`），根本不走 DRM/renderD；走的是 glibc 原生重编产物 + 标准 ICD。
 
-1. **PanVK（Mesa）缺内核侧 panfrost DRM**：容器里有 glibc 版 `libvulkan_panfrost.so`（`/usr/lib/aarch64-linux-gnu/`，可正常链接 glibc），`panfrost_icd.json` 注册也正确；但宿主 `lsmod` 只有 vendor `mali_kbase_mt6989_r44` + `/dev/mali0`，**没有 panfrost.ko / renderD 节点**。zink 走该 ICD 报 `Failed to detect any valid GPUs`（`vkEnumeratePhysicalDevices` 失败）。手工 mknod 的 `card0/renderD128` 指向 mediatek_drm 显示驱动（226,0），不是 GPU，无效。
-2. **Android vendor Vulkan 经 libhybris 会挂死**：宿主有 `/vendor/lib64/hw/vulkan.mali.so`，容器有 `/opt/hy/inst/lib/libvulkan.so.1.2.183` 桥（配 `HYBRIS_LD_LIBRARY_PATH`）。但 Vulkan loader 1.4.341 拒绝其旧接口（`loader interface version 0`，要求 ≥5），`glxinfo -B` 实测超时（`RC=124`），与既有"`LD_LIBRARY_PATH=/opt/hy/inst/lib` 拖死 Xwayland/wine"记录一致。
-3. **llvmpipe 在该 MTK 上无条件死锁**：`LP_NUM_THREADS=0`（auto）与 `=1` 均停在 `Loading 3D bitmaps: 5`、CPU 0%、栈在 libgallium futex；与 DXVK 是否存在无关。注意 `LP_NUM_THREADS=0` 是自动全核而非单线程，此前理解有误。
+**当前容器复核（成功复现 §报告 12.3）**：
 
-**结论**：`GALLIUM_DRIVER=softpipe` + `--video-memory-usage=low` 仍是目前唯一通关组合。加载条停在 50% 的 `Parallel sprite loader` 阶段是 softpipe 单线程软件光栅化 + BCn 纹理压缩在 CPU 上跑，进程 100% CPU、RSS 2.4GB，属缓慢而非死锁（平板 44s 完成，MTK 需数分钟）。要硬件加速需内核提供 panfrost DRM 或更换支持 Mali kbase 的 Vulkan 实现，容器层无解。
+```
+/opt/panvk/libvulkan_panfrost_g.so        24MB glibc 重编产物，在场
+/etc/vulkan/icd.d/panvk_g.json            api_version 1.4，指向上述 .so
+VK_ICD_FILENAMES=/etc/vulkan/icd.d/panvk_g.json + tools/x86vk/probe6-glibc-panvk.c：
+  neg rc=0 iface=5 / P3 rc=0 实例 / P4 rc=0 devices=1 /
+  P5 name=PanVK-G720-Immortalis MC12 type=1 api=1.4 / P6b rc=0 dev / P7 后探针自身 segfault
+WARNING: panvk is not a conformant Vulkan implementation
+```
 
-**为何 `mali_nsfix` / `vkms` 帮不上**（应要求核查 LKM 模块）：
+即 **glibc PanVK 硬件 Vulkan 在当前设备上确实可用**，GPU context 靠宿主 `mali_nsfix.ko` 在 PID namespace 内建立（`nshf_hits=94`、active）——这也说明 nsfix 不是"与 DRM 无关"，恰恰是这条硬件链的必要内核前提。
 
-- `mali_nsfix-android14-6.1.ko` 的模块描述为 `Redirect find_get_pid() calls made by the Mali kbase driver so GPU contexts work inside a PID namespace`——它 kprobe `find_get_pid()`（`nshf_hits=94`、`nshf_active=1`、`nshf_driver=mali_kbase_mt6989_r44`），解决的是**容器内 PID namespace 下开 Mali GPU context**，与 DRM 设备节点暴露无关，且它本就在正常工作。
-- 同目录的 `vkms-android14-6.1.ko` 是 Virtual KMS（软件 KMS，带 `DRM_RENDER_ALLOW`），即便加载也只注册软件 card/render 节点，不会把 Mali 硬件交给 PanVK；宿主 `mediatek_drm` 已占用 card0。
-- vendor Mali Vulkan（`/vendor/lib64/hw/mt6989/vulkan.mali.so`）只走 `/dev/mali0` kbase ioctl，二进制内无 `/dev/dri`/`drmOpen` 字样；走标准 Vulkan loader 时 libhybris ICD（`libvulkan.so.1.2.183`）因 `loader interface version 0`（loader 1.4.341 要求 ≥5）被拒，直接 dlopen 该库则挂起。容器里的 `vulkaninfo`/`vkcube` 全是 x86-64 二进制，前期测试受 `Exec format error` 干扰，改用 python ctypes 直连后结论一致。
+**此前探测为何全失败**（记录以免重蹈）：
+
+- 用了 bionic 版 `/usr/local/lib/vulkan/panvk/libvulkan_panfrost.so`（NDK 构建）：标准 loader 下 `vkCreateInstance` 失败，走 libhybris `LIBVULKAN` 开关则 jemalloc TSD abort；正确产物是 `/opt/panvk/libvulkan_panfrost_g.so`（glibc）。
+- 用 `/usr/share/vulkan/icd.d/panfrost_icd.json`（系统 Mesa 驱动）+ zink：`vkEnumeratePhysicalDevices` 失败——那是给 panfrost DRM 用的，不是 kbase 移植版。
+- 容器 `vulkaninfo`/`vkcube` 是 x86-64 二进制（`Exec format error`），早期 glxinfo 超时是环境干扰；用 python ctypes / gcc 探针才拿到可信结果。
+
+**仍未打通的环节**：zink 走 PanVK 时 `vkCreateInstance` 之前正常，但 Xwayland GLX 层报 `couldn't find RGB GLX visual`（`/etc/environment` 与 anland-session 都强制 `LIBGL_ALWAYS_SOFTWARE=1`/llvmpipe，zink 又被 `CPU device requested` 限制）。**DXVK 走 PanVK 的 D3D 直通**仍是 §报告 12.4 的 open item（`Direct3DCreate9` 返回 NULL，两平台共有）。所以 Factorio 当前仍用 softpipe + `--video-memory-usage=low` 通关，但"PanVK 在本机不可用"的结论作废。
+
+**llvmpipe 死锁结论保留**：`LP_NUM_THREADS=0`（auto，非单线程）与 `=1` 均停在 `Loading 3D bitmaps: 5`、CPU 0%、栈在 libgallium futex；这是 GL 侧问题，与 Vulkan/PanVK 无关。
