@@ -1494,8 +1494,46 @@ main() {
     refresh_user_service
     record_component_version "$PACKAGE_VERSION"
     update_desktop_config
+    patch_anland_session_wayland_env
     log "Anland Next session 安装完成（${PACKAGE_VERSION:-unknown}）。" \
         "Anland Next session installation completed (${PACKAGE_VERSION:-unknown})."
+}
+
+# patch_anland_session_wayland_env — 修复会话 unit 重启死循环（2026-11-27）
+# 上游 anland-session 脚本在启动时把 WAYLAND_DISPLAY=wayland-anland（app-facing
+# 名字）写进 systemd user manager 的持久环境；下次会话 unit 重启时继承该值，
+# 第 104 行检查 /run/anland/wayland-anland（宿主实际只有 wayland-0）失败 →
+# exit 1 → Restart=on-failure 无限循环 → anland-apps 报 "no session environment"
+# → 点击任何应用无反应。这里强制会话启动时的 socket 检查用 wayland-0。
+patch_anland_session_wayland_env() {
+    local sess="" home=""
+    for home in /home/* /root; do
+        [ -f "$home/.local/bin/anland-session" ] && { sess="$home/.local/bin/anland-session"; break; }
+    done
+    [ -n "$sess" ] || return 0
+    # 幂等：已含 FIX 标记则跳过
+    grep -q 'FIX-2026-11-27-wayland-loop' "$sess" 2>/dev/null && return 0
+    grep -q ': "${WAYLAND_DISPLAY:=wayland-0}"' "$sess" 2>/dev/null || return 0
+    cp -f "$sess" "${sess}.bak-wayland-loop" 2>/dev/null || true
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$sess" <<'PY' 2>/dev/null
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = ': "${WAYLAND_DISPLAY:=wayland-0}"'
+new = '''# FIX-2026-11-27-wayland-loop: force the host socket name for the check below.
+# A prior session publishes "wayland-anland" (app-facing) into the user manager;
+# inheriting it on restart makes the socket check look for a non-existent path.
+WAYLAND_DISPLAY=wayland-0
+export WAYLAND_DISPLAY'''
+if old in s and 'FIX-2026-11-27-wayland-loop' not in s:
+    open(p, 'w').write(s.replace(old, new, 1))
+PY
+    else
+        # python 不可用时退回 sed（按行替换）
+        sed -i 's|: "${WAYLAND_DISPLAY:=wayland-0}"|WAYLAND_DISPLAY=wayland-0\nexport WAYLAND_DISPLAY  # FIX-2026-11-27-wayland-loop|' "$sess" 2>/dev/null || true
+    fi
+    log "anland-session: patched WAYLAND_DISPLAY reset (wayland-loop fix)"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

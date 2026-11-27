@@ -339,3 +339,20 @@ XDG_RUNTIME_DIR=/run/anland
 WAYLAND_DISPLAY=wayland-0
 ```
 注意用**无条件赋值**，不能用 `${VAR:=default}`——变量已被设成错误值时默认值不生效。实测修复后直接 `google-chrome about:blank` 无需任何前缀即出画面（首次启动显示服务条款页），`ERR=0`。从 anland 应用菜单启动时会话已注入正确变量，此修复主要覆盖终端/脚本启动场景。
+
+### 9.6 最新 release 的 anland shell 打不开应用：会话 unit 重启死循环（2026-11-27）
+
+**现象**：用最新 release（`droidspaces-rootfs-all-wayland`，2026-11-27）创建容器后，anland shell 点任何应用无反应。`/run/anland/anland-apps.log` 反复报 `no session environment (is the anland session running?)`。
+
+**排查链**（逐层证据）：
+1. `systemctl --user is-active anland-session` = `inactive`，会话脚本日志报 `no wayland socket at /run/anland/wayland-anland`；
+2. 宿主实际 socket 是 `/run/anland/wayland-0`（bind mount `/data/local/tmp:/run/anland` 映射宿主 `/data/local/tmp/wayland-0`），没有 `wayland-anland`；
+3. user manager 持久环境里残留 `WAYLAND_DISPLAY=wayland-anland`；
+4. **根因**：`anland-session` 脚本启动时把 app-facing 的 `WAYLAND_DISPLAY=wayland-anland` 写进 user manager（第 205 行 `set-environment`），下次会话 unit 重启时继承该值 → 第 104 行检查 `/run/anland/wayland-anland`（不存在）→ `exit 1` → `Restart=on-failure` 无限循环 → anland-apps 认为会话不 alive → 点击无效。
+5. 对照实验：手动 nohup 启动会话（不继承污染值）可稳定存活 40–60s+，确认是 unit + 环境变量交互问题，非 GPU/驱动问题。
+
+**修复**：
+- 即时（容器）：`systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY XDG_SESSION_TYPE` + 给 `/home/Gold/.local/bin/anland-session` 打补丁，把第 40 行 `: "${WAYLAND_DISPLAY:=wayland-0}"` 改为无条件 `WAYLAND_DISPLAY=wayland-0`（socket 检查用宿主名，不被污染）。补丁后会话稳定 active 60s+，连续启动 konsole/chrome 会话不再崩。
+- 固化（镜像）：`scripts/tui/install-anland-next.sh` 安装完成钩子新增 `patch_anland_session_wayland_env()`，幂等打同样的补丁（python3 优先、sed 回退），后续重建镜像自动带上。
+
+**注意**：anland-session 脚本来自外部包 `anland-session-packages` Release，不在本仓库，故只能在安装后 hook 补丁。新 release 已发布（83 资产），需重建镜像或手工打补丁才能修复此问题。
