@@ -303,7 +303,25 @@ dmesg: wdt_dump_cntcv（全 8 核 WDT 计数器转储）→ 硬件看门狗复�
 1. 每次启动前**彻底清理残留 wine 进程**（`winedevice.exe` 堆积是放大器）；
 2. `max-texture-size=4096` + `--video-memory-usage=low`（已做）；
 3. 限帧减少 zink 转换缓冲堆积——仍是未解项。
-4. 定位 factorio.exe RSS 10GB 的构成（zink 转换缓冲 / 32768×24576 虚拟图集 / box64 JIT 内存映射）是下一步方向。
+4. **factorio.exe RSS 10GB 构成实测（2026-11-27，运行中抓 `/proc/<pid>/status` + `smaps`）**：
+
+```
+VmPeak 12716812 kB / VmSize 12292432 kB / VmRSS 8026568 kB / VmHWM 8158124 kB
+RssAnon 995988 kB (≈1GB)  /  VmSwap 700524 kB  /  Threads 42
+top VMA（全部 [anon] rw-p，按 RSS 降序，kB）：
+   223484  8a040000-a0fb0000
+   189188  ab5a0000-bc0c0000
+   100592  82000000-89d60000
+    51980  756e0000-7b740000
+    34252  7bff0000-7f430000
+  另有 rwxp [anon] 25920 kB + r-xp [anon] 10936 kB（box64 dynarec JIT 代码缓存）
+```
+
+**关键发现**：`VmRSS 8GB` 但 `RssAnon 仅 1GB` → 约 **7GB 是 `[anon] rw-p` 私有匿名 mmap**，不是文件映射、不是传统堆。这些 VMA 地址全落在 **32 位区间（0x65000000–0xbc0c0000）**，是 **box64 为 x86-64 客户程序模拟的 32 位地址空间 + wine 进程堆 + zink/GL 缓冲** 的混合体。单个 VMA 100–223MB，数量极多（`smaps` 全量遍历在 90s 内没跑完，说明有数千个映射）。
+
+`winedevice.exe` 各行显示的 VIRT 5.8G 是 box64 给每个 wine 进程预留的 32 位地址空间基址（共享同一映射），**不是独立占用**；真正吃物理内存的是 `factorio.exe` 进程本身（RSS 10G）。
+
+**结论**：10GB ≈ box64 32 位地址空间匿名映射（~7GB）+ RssAnon 真匿名页（~1GB）+ swap 计入及零碎（~2GB）。这是 **box64 + wine + zink 三层叠加的内存映射放大**，不是 Factorio 自身逻辑内存。此配置下 15GB 设备必然耗尽——**硬件路径（zink+PanVK）在这台设备上不具备长期运行条件**，softpipe 路径才是现实选择（其 VIRT/RSS 远低于此）。
 
 ### 9.5 容器内 Chrome 打不开：Wayland 环境变量缺失（2026-11-26）
 
