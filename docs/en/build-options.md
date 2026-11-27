@@ -40,8 +40,8 @@ Choose the target, desktop, display backend, and optional features on the GitHub
 | `display_backend` | `x11` / `anland-wayland` | Defaults to Wayland in the Chinese workflow and X11 in the English workflow; Arch KDE and some profiles force Wayland. |
 | `PulseAudio` | `socket` / `tcp` / `none`; default `socket` | X11 audio forwarding; Anland sets this to `none`. |
 | `enable_zh_tz` | `true` / `false` | Installs Chinese locale and Shanghai timezone; defaults differ by workflow. |
-| `gpu_vendor` | `qualcomm` / `mediatek` (dual-vendor workflow: `both`); default `qualcomm` | Which GPU stack the image is built for. `qualcomm` installs the Adreno Mesa build and sets kgsl; `mediatek` removes those variables and installs the standard software drivers instead. |
-| `enable_mesa` | `true` / `false`; default `true` | Installs Mesa drivers: the Adreno build on Qualcomm, standard software drivers on MediaTek. |
+| `gpu_vendor` | `qualcomm` / `mediatek` (dual-vendor workflow: `both`); default `qualcomm` | Which GPU stack the image is built for. `qualcomm` installs the Adreno Mesa build and sets kgsl; `mediatek` installs glibc PanVK (prebuilt v26.3.1 on `/dev/mali0` for Mesa Vulkan), with GL defaulting to softpipe — see [x86 summary §9.4](../x86-on-android-summary.zh.md#94-zink--panvk-硬件路径实测跑通但导致整机看门狗重启2026-11-26). |
+| `enable_mesa` | `true` / `false`; default `true` | Installs Mesa drivers: the Adreno build on Qualcomm; standard Mesa software drivers (llvmpipe/softpipe) on MediaTek, paired with glibc PanVK for hardware Vulkan. |
 | `enable_8gen2_wayland` | `true` / `false`; default `false` | Sets the Turnip UBWC Wayland workaround for relevant devices. |
 | `nosnap` | `true` / `false` | Ubuntu only: removes Snap and prevents APT from reinstalling it; defaults differ by workflow. |
 | `enable_systemd257` | `true` / `false`; default `false` | Tries the systemd 257 package family for old Android kernels; only `none` and standard `KDE` are supported. |

@@ -354,29 +354,34 @@ dma-buf，这条路径有效。SurfaceControl 合成器（`awl_sc.cpp`）调用�
 
 ### MTK 的 Vulkan：Mesa PanVK on kbase
 
-GLES 之外，MTK 变体的镜像还带一份 [mali-panvk](https://github.com/JimVulkan/mali-panvk)——
-Mesa PanVK 对手机自带 kbase 驱动（`/dev/mali0`）的移植，官方实测设备含
-Tab S10+（Immortalis-G720，天玑 9300+）。它给 DXVK（Wine 的 D3D9/10/11）
-与 Zink（GL）提供 Vulkan 1.4 真硬件路径，`VK_EXT_robustness2` 的 null
-descriptor 已支持（DXVK/zink 的硬需求）。
+MTK 变体镜像带一份 glibc 版 Mesa PanVK on kbase（`/dev/mali0`）——Mesa PanVK
+对手机自带 Mali kbase 驱动的移植，预编自
+[panvk-kbase-android](https://github.com/zenithblue-oss/panvk-kbase-android) v26.3.1
+（`build-panvk-glibc.sh` 默认下载，SHA256 校验）。它给 Vulkan 客户端提供 1.4
+真硬件路径，设备名如 `Mali-G720-Immortalis MC12`。
 
-加载链与 GLES 完全对称：
+**当前加载链**（glibc 原生，不再走 libhybris）：
 
 ```text
-glibc 应用 → libhybris libvulkan → LIBVULKAN 开关 → panvk（bionic 构建，
-只能经 android_dlopen 加载）→ /dev/mali0（kbase）
+glibc 应用 → 系统 libvulkan.so.1（标准 Khronos loader）
+           → /etc/vulkan/icd.d/panvk_g.json
+           → /opt/panvk/libvulkan_panfrost_g.so（glibc 预编）→ /dev/mali0（kbase）
 ```
 
-Wayland 上屏由 hybris 的 `vulkanplatform_wayland` 完成：把
-`VK_KHR_wayland_surface` 转成 `vkCreateAndroidSurfaceKHR`，交换链缓冲经
-`zwp_linux_dmabuf_v1` 交给 waylandbridge。内核前提与 GLES 路线相同：
-`mali_nsfix.ko` 缺了同样建不了 GPU context（上游 README 的「免 root」只对
-启动器架构成立——那是普通应用进程，没有 PID namespace）。
+注意区分：旧版 NDK/bionic mali-panvk（`LIBVULKAN` 开关 + `android_dlopen`）在
+glibc 容器里会 jemalloc TSD abort，已不作为交付路径。预编 glibc 库 NEEDED
+`libSPIRV-Tools.so`（发行版只有静态 `.a`），构建时用最小 no-op stub 满足动态链接。
 
-未装 panvk 时 `LIBVULKAN` 保持默认（厂商 blob 的 Android Vulkan loader）。
-当前镜像里 Steam 游戏仍走 wined3d/OpenGL（DXVK 在容器内的 x86 Proton 下
-建不了 Vulkan 实例）；panvk 的直接受益者先是 Zink/vulkaninfo 这类 glibc
-Vulkan 客户端，DXVK 直通是后续按真机验证推进的课题。
+Wayland 上屏可由 Zink/vulkaninfo 这类 glibc Vulkan 客户端直接用；内核前提与
+GLES 路线相同：`mali_nsfix.ko` 缺了建不了 GPU context（上游「免 root」只对普通
+Android 应用进程成立，容器内需要 nsfix）。
+
+**实际渲染策略**：镜像默认 GL 走 softpipe（`LIBGL_ALWAYS_SOFTWARE=1`），不是硬件。
+原因是 zink+PanVK 持续渲染在 box64+wine 下会出现 RSS 膨胀（实测 factorio.exe
+达 10GB）导致整机内存耗尽重启；驱动升级到 v26.3.1 虽消除了 DEVICE LOST，但治不了
+box64 的 32 位地址空间映射放大。详见
+[x86-on-Android 总结 §9.4](x86-on-android-summary.zh.md#94-zink--panvk-硬件路径实测跑通但导致整机看门狗重启2026-11-26)。
+PanVK 硬件 Vulkan 可作短时探针/验证用途，不作游戏长期方案。
 
 验证方式：截两次屏 —— 客户端运行时一次，退出后一次。只截一次不够：先前被
 强杀的客户端留下的窗口会产生假阳性。

@@ -23,10 +23,11 @@
 > MTK / Mali 设备另需 [droidspaces-lkm](https://github.com/misaka5202/droidspaces-lkm)：
 > 它带 `mali_nsfix.ko`，在 Mali 平台上自动加载。
 
-标准 MTK 镜像通过 libhybris 直接使用厂商 Mali 驱动（`/dev/mali0`），这就是硬件
-加速的来源；`mali_nsfix` 是它的前提 —— 没有它时 `mali_kbase` 在 PID 命名空间里
-建不了 GPU context（`dmesg` 报 `Failed to get pid pointer`，用户态是
-`eglInitialize` 返回 `0x3001`）。详见
+标准 MTK 镜像带 glibc PanVK v26.3.1 驱动，走 `/dev/mali0` 提供硬件 Vulkan；
+GL 渲染默认 softpipe —— zink+PanVK 持续渲染会在 box64 下耗尽内存（见
+[x86-on-Android 总结 §9.4](docs/x86-on-android-summary.zh.md#94-zink--panvk-硬件路径实测跑通但导致整机看门狗重启2026-11-26)）。
+`mali_nsfix` 是前提 —— 没有它时 `mali_kbase` 在 PID 命名空间里建不了 GPU
+context（`dmesg` 报 `Failed to get pid pointer`）。详见
 [桌面与 Anland 指南](docs/zh/桌面与Anland.md)。
 
 ```bash
@@ -277,7 +278,7 @@ logcat -d | grep 'anland-wl:' | tail -20
 | 文件名带 | 适用 | 渲染 |
 |---|---|---|
 | `-qualcomm-` | 骁龙 / Adreno | Mesa freedreno/kgsl + turnip 硬件加速 |
-| `-mediatek-` | 联发科 / Mali | libhybris 驱动厂商 Mali（`/dev/mali0`，硬件加速） |
+| `-mediatek-` | 联发科 / Mali | glibc PanVK 走 `/dev/mali0`（Mesa Vulkan，预编 v26.3.1）；GL 默认 softpipe——见 [x86-on-Android 总结 §9.4](docs/x86-on-android-summary.zh.md#94-zink--panvk-硬件路径实测跑通但导致整机看门狗重启2026-11-26) |
 
 6.x 的容器会话本身是 GPU 中立的（`ANLAND_XWAYLAND=0`，用发行版自带的 Xwayland），
 GPU 差异体现在用户态图形栈：高通走 Mesa + kgsl，MTK 走 libhybris + 厂商驱动，
@@ -287,9 +288,11 @@ GPU 差异体现在用户态图形栈：高通走 Mesa + kgsl，MTK 走 libhybri
 
 ## 7. 构建
 
-Actions → “发布全桌面 Wayland RootFS（高通 + MTK 双版本）” → `gpu_vendor` 保持 `both`。
+Actions → “发布全桌面 Wayland RootFS（高通 + MTK 双版本）”（`build-rootfs-all-wayland-gpu.yml`）→ `gpu_vendor` 保持 `both`、`language` 保持 `both` 即为双 GPU×双语言完整发布；`publish_release=true` 会更新滚动 Release。完整矩阵为 20 个桌面×发行版变体 × 2 厂商 × 2 语言 = 80 个 rootfs 资产。
 
-单个组合用单目标工作流并指定 `gpu_vendor`。
+最新完整版 Release 为 [`droidspaces-rootfs-all-wayland`](https://github.com/misaka5202/Droidspaces-anland6-rootfs/releases/tag/droidspaces-rootfs-all-wayland)（2026-11-27 发布，CI run `45969037727`），已包含 MTK 预编 PanVK v26.3.1 驱动与 Chrome Wayland 启动修复。
+
+单个组合用单目标工作流并指定 `gpu_vendor` / `language`；设 `publish_release=false` 可只出 artifact、不进 Release。
 
 新增的输入：
 

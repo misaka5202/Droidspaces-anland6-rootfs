@@ -23,7 +23,8 @@
 | `steam-open-settings`（由 `tui/install-steam.sh` 生成） | Linux 容器 | 经 URL handler 打开 Steam 设置，绕开未实现 EWMH 的窗口管理器。 |
 | `tui/anland-osk.c` | RootFS 构建环境 | 屏幕键盘源码；由 `tui/install-steam.sh` 就地编译，供无法获得 Android 输入法的 X11 客户端使用。 |
 | `steam-osk`（由 `tui/install-steam.sh` 生成） | Linux 容器 | 开关上述屏幕键盘。 |
-| `tui/install-panvk.sh` | RootFS 构建环境 | 下载并安装 Mesa PanVK on kbase（mali-panvk）到 `/usr/local/lib/vulkan/panvk/`，仅 MTK 变体调用；经 libhybris 的 `LIBVULKAN` 开关加载，为 DXVK/Zink 提供真 GPU Vulkan。 |
+| `tui/build-panvk-glibc.sh` | RootFS 构建环境 | MTK 默认路径：`PANVK_PREBUILT=prefer` 下载 panvk-kbase v26.3.1 预编 glibc `.so`（SHA256 校验 + SPIRV-Tools stub + drirc 环境），落到 `/opt/panvk/libvulkan_panfrost_g.so` 并注册 `/etc/vulkan/icd.d/panvk_g.json`；失败才回退 `PANVK_PREBUILT=source` 两阶段源码编译。 |
+| `tui/install-panvk.sh` | RootFS 构建环境 | 旧版 NDK/bionic mali-panvk 安装器（v1.6.0 r10），仅作回退；bionic 库在 glibc 容器内会 jemalloc TSD abort，正常路径用 `build-panvk-glibc.sh`。 |
 | `tui/install-anland-next.sh` | ARM64 Debian/Ubuntu/Fedora/Arch 容器 | 安装 Anland Next session 包（mini-wm + patched Xwayland + patched bubblewrap）。 |
 | `lib/anland-build.sh` | RootFS 构建宿主 | 为 native/QEMU 构建统一解析 Anland 包族、Release tag 和 revision。 |
 | `install-usb-manager.sh` | Linux 容器 | 安装 Droidspaces USB Manager、发行版依赖、菜单入口和用户权限。 |

@@ -375,33 +375,38 @@ does not present the result; the reason is not established.
 
 ### Vulkan on MTK: Mesa PanVK on kbase
 
-Besides GLES, the MTK variant of the image ships
-[mali-panvk](https://github.com/JimVulkan/mali-panvk) — a port of Mesa's PanVK
-to the phone's own kbase driver (`/dev/mali0`), tested upstream on the Tab S10+
-(Immortalis-G720, Dimensity 9300+). It gives DXVK (Wine's D3D9/10/11) and Zink
-(GL) a Vulkan 1.4 real-hardware path, with the `VK_EXT_robustness2` null
-descriptor DXVK and zink require.
+The MTK variant ships a glibc build of Mesa PanVK on kbase (`/dev/mali0`) —
+Mesa's PanVK port to the phone's Mali kbase driver, prebuilt from
+[panvk-kbase-android](https://github.com/zenithblue-oss/panvk-kbase-android)
+v26.3.1 (`build-panvk-glibc.sh` downloads it by default with SHA256 verification).
+It gives Vulkan clients a real-hardware 1.4 path; device names look like
+`Mali-G720-Immortalis MC12`.
 
-The load chain mirrors the GLES one:
+**Current load chain** (native glibc, no longer via libhybris):
 
 ```text
-glibc app → libhybris libvulkan → the LIBVULKAN switch → panvk (a bionic
-build, loadable only through android_dlopen) → /dev/mali0 (kbase)
+glibc app → system libvulkan.so.1 (standard Khronos loader)
+           → /etc/vulkan/icd.d/panvk_g.json
+           → /opt/panvk/libvulkan_panfrost_g.so (glibc prebuilt) → /dev/mali0 (kbase)
 ```
 
-Presentation to Wayland is done by hybris's `vulkanplatform_wayland`: it turns
-`VK_KHR_wayland_surface` into `vkCreateAndroidSurfaceKHR`, and the swapchain
-buffers reach waylandbridge through `zwp_linux_dmabuf_v1`. The kernel
-prerequisite is the same as the GLES path: without `mali_nsfix.ko` no GPU
-context can be created (the upstream README's "no root" only holds for the
-launcher architecture — a plain app process with no PID namespace).
+Note: the older NDK/bionic mali-panvk (`LIBVULKAN` switch + `android_dlopen`)
+hits a jemalloc TSD abort inside glibc containers and is no longer a delivery
+path. The prebuilt glibc library NEEDEDs `libSPIRV-Tools.so` (distros ship only
+the static `.a`), so a minimal no-op stub satisfies dynamic linking at build time.
 
-Without panvk installed, `LIBVULKAN` keeps its default (the vendor blob's
-Android Vulkan loader). Steam titles in the current image still run
-wined3d/OpenGL (DXVK cannot create a Vulkan instance under the image's x86
-Proton); panvk's first beneficiaries are glibc Vulkan clients such as
-zink/vulkaninfo, and the DXVK pass-through is a follow-up driven by
-on-device verification.
+Wayland presentation can be used directly by glibc Vulkan clients such as
+Zink/vulkaninfo. The kernel prerequisite matches the GLES path: without
+`mali_nsfix.ko` no GPU context can be created (the upstream "no root" only holds
+for a plain Android app process with no PID namespace).
+
+**Actual rendering policy**: the image defaults GL to softpipe
+(`LIBGL_ALWAYS_SOFTWARE=1`), not hardware. Sustained zink+PanVK rendering under
+box64+wine causes RSS inflation (measured `factorio.exe` at 10 GB) that exhausts
+system memory and triggers a watchdog reboot; the v26.3.1 driver upgrade removes
+DEVICE LOST but cannot fix box64's 32-bit address-space mapping amplification.
+See [x86-on-Android summary §9.4](../x86-on-android-summary.zh.md#94-zink--panvk-硬件路径实测跑通但导致整机看门狗重启2026-11-26).
+PanVK hardware Vulkan is for short probes/verification only, not long-running games.
 
 Verify by capturing the screen twice — while the client is running and again
 after it exits. Capturing once is not enough: a window left behind by a

@@ -24,10 +24,12 @@ Requirements: root (KernelSU / APatch / Magisk), Droidspaces, arm64.
 > MediaTek / Mali devices additionally need [droidspaces-lkm](https://github.com/misaka5202/droidspaces-lkm),
 > which ships `mali_nsfix.ko` and loads it automatically on Mali platforms.
 
-The stock MediaTek image renders through libhybris on the vendor Mali driver,
-which is what gives hardware acceleration. `mali_nsfix` is required because
-`mali_kbase` otherwise fails the pid lookup inside a PID namespace and
-`eglInitialize` returns `0x3001`. See the
+The MediaTek image ships a glibc PanVK v26.3.1 driver on `/dev/mali0` for
+hardware Vulkan; GL rendering defaults to softpipe because sustained zink+PanVK
+rendering exhausts memory under box64 (see the
+[x86-on-Android summary](docs/x86-on-android-summary.zh.md#94-zink--panvk-硬件路径实测跑通但导致整机看门狗重启2026-11-26)).
+`mali_nsfix` is required because `mali_kbase` otherwise fails the pid lookup
+inside a PID namespace and GPU contexts cannot be created. See the
 [desktop and Anland guide](docs/en/desktop-and-anland.md).
 
 ```bash
@@ -305,7 +307,7 @@ Two variants, because the two GPU vendors need opposite driver setups:
 | Filename contains | For | Rendering |
 |---|---|---|
 | `-qualcomm-` | Snapdragon / Adreno | Mesa freedreno/kgsl plus turnip, hardware accelerated |
-| `-mediatek-` | MediaTek / Mali | libhybris driving the vendor Mali driver on `/dev/mali0` (hardware) |
+| `-mediatek-` | MediaTek / Mali | glibc PanVK on `/dev/mali0` (Mesa Vulkan, prebuilt v26.3.1); GL defaults to softpipe — see [x86-on-Android summary §9.4](docs/x86-on-android-summary.zh.md#94-zink--panvk-硬件路径实测跑通但导致整机看门狗重启2026-11-26) |
 
 The 6.x container session is itself GPU-neutral (`ANLAND_XWAYLAND=0`, using the
 distribution's own Xwayland); the GPU difference lives only in the Mesa layer,
@@ -316,9 +318,11 @@ uses the vendor GPU driver on both platforms.
 
 ## 7. Building
 
-Actions → “发布全桌面 Wayland RootFS（高通 + MTK 双版本）” → leave `gpu_vendor` on `both`.
+Actions → “Publish All-Wayland RootFS (Qualcomm + MediaTek)” (`build-rootfs-all-wayland-gpu.yml`) → leave `gpu_vendor` on `both` and `language` on `both` for the full dual-vendor / dual-language release. Set `publish_release=true` to update the rolling Release. The full matrix is 20 desktop×distro variants × 2 vendors × 2 languages = 80 rootfs assets.
 
-For a single combination, use the single-target workflow and set `gpu_vendor`.
+The latest full release is tagged [`droidspaces-rootfs-all-wayland`](https://github.com/misaka5202/Droidspaces-anland6-rootfs/releases/tag/droidspaces-rootfs-all-wayland) (published 2026-11-27, CI run `45969037727`). It includes the prebuilt PanVK v26.3.1 glibc driver for MTK and the Chrome Wayland launcher fix.
+
+For a single combination, use the single-target workflow and set `gpu_vendor` / `language`; set `publish_release=false` to keep artifacts off the Release.
 
 Inputs added for 6.x:
 
